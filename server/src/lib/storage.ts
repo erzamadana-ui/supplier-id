@@ -18,7 +18,7 @@ export async function storeEvidence(localPath: string, mimeType: string): Promis
   const body = fs.readFileSync(localPath);
   const r = await fetch(`${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET}/${key}`, {
     method: 'POST',
-    headers: { Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, 'Content-Type': mimeType, 'x-upsert': 'true', 'cache-control': '31536000' },
+    headers: { Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, apikey: SUPABASE_SERVICE_KEY!, 'Content-Type': mimeType, 'x-upsert': 'true', 'cache-control': '31536000' },
     body,
   });
   if (!r.ok) throw new Error(`STORAGE_UPLOAD_FAILED ${r.status} ${await r.text()}`);

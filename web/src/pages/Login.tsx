@@ -1,0 +1,44 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../lib/auth';
+import { errMsg } from '../lib/api';
+import { Card, Alert } from '../components/ui';
+
+const DEMO = [
+  { email: 'admin@supplier.id', label: 'Admin Supplier.id' },
+  { email: 'finance@supplier.id', label: 'Admin — Finance Approver (dual control fee)' },
+  { email: 'tani@supplier.id', label: 'Supplier — Kelompok Tani Sumber Rezeki (non-PKP)' },
+  { email: 'ternak@supplier.id', label: 'Supplier — PT Ternak Nusantara (PKP)' },
+  { email: 'nelayan@supplier.id', label: 'Supplier — Koperasi Nelayan Batam' },
+  { email: 'buyer@supplier.id', label: 'Buyer — PT Resto Sumatera Group' },
+  { email: 'hotel@supplier.id', label: 'Buyer — Hotel Bukittinggi Indah' },
+];
+
+export default function LoginPage() {
+  const { login } = useAuth();
+  const nav = useNavigate();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('Password123');
+  const [err, setErr] = useState('');
+  const go = async (e?: string) => {
+    setErr('');
+    try { await login(e ?? email, password); nav('/'); } catch (x) { setErr(errMsg(x)); }
+  };
+  return (
+    <div className="login">
+      <Card title={<span>Supplier<span style={{ color: 'var(--brand)' }}>.id</span> — masuk</span>}>
+        <p className="muted">Marketplace B2B hasil tani, ternak & laut. DECLARE → PROVE → DELIVER → INSPECT → EVIDENCE → SETTLE.</p>
+        {err && <Alert kind="error">{err}</Alert>}
+        <form onSubmit={(e) => { e.preventDefault(); go(); }}>
+          <label className="field"><span className="field-label">Email</span><input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@perusahaan.id" /></label>
+          <label className="field"><span className="field-label">Kata sandi</span><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
+          <button className="btn" type="submit">Masuk</button>
+        </form>
+        <div className="demo">
+          <small>Akun demo (sandi: Password123):</small>
+          {DEMO.map((d) => <button key={d.email} className="btn secondary small" onClick={() => { setEmail(d.email); go(d.email); }}>{d.label}</button>)}
+        </div>
+      </Card>
+    </div>
+  );
+}

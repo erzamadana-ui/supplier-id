@@ -1,0 +1,15 @@
+{
+  "name": "supplier-id",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Supplier.id — marketplace B2B hasil tani, ternak & laut (API + Web)",
+  "scripts": {
+    "install:all": "cd server && npm install && cd ../web && npm install",
+    "dev:api": "cd server && npm run dev",
+    "dev:web": "cd web && npm run dev",
+    "build": "cd web && npm run build",
+    "start": "cd server && npm start",
+    "test": "cd server && npm test",
+    "demo": "cd server && node scripts/demo-flow.mjs"
+  }
+}

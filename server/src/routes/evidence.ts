@@ -6,6 +6,7 @@ import crypto from 'node:crypto';
 import { z } from 'zod';
 import { pool, q, one, maybe } from '../db';
 import { asyncH, parse, bad, forbidden, requireRole } from '../lib/http';
+import { storeEvidence } from '../lib/storage';
 
 export const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -70,12 +71,13 @@ evidenceRouter.post('/', requireRole('SUPPLIER', 'BUYER', 'ADMIN'), upload.singl
   }
   const sha = crypto.createHash('sha256').update(fs.readFileSync(req.file.path)).digest('hex');
   const consent = !!m.location_consent;
+  const storedPath = await storeEvidence(req.file.path, req.file.mimetype);
   const row = await one(
     pool,
     `INSERT INTO evidence_files(owner_type, kind, media_type, file_path, sha256, supplier_id, buyer_id, product_id, batch_id, harvest_id,
        order_id, shipment_id, inspection_id, return_case_id, taken_at, uploaded_by, lat, lng, location_consent)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
-    [m.owner_type, m.kind, req.file.mimetype, path.basename(req.file.path), sha, supplierId, buyerId, productId, m.batch_id ?? null, harvestId,
+    [m.owner_type, m.kind, req.file.mimetype, storedPath, sha, supplierId, buyerId, productId, m.batch_id ?? null, harvestId,
       m.order_id ?? null, m.shipment_id ?? null, m.inspection_id ?? null, m.return_case_id ?? null,
       m.taken_at ? new Date(m.taken_at) : null, u.id, consent ? m.lat ?? null : null, consent ? m.lng ?? null : null, consent],
   );

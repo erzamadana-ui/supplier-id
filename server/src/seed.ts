@@ -14,6 +14,16 @@ export const DEMO_ACCOUNTS = [
 export const DEMO_PASSWORD = 'Password123';
 
 export async function seed() {
+  // Admin produksi dari environment (ADMIN_EMAIL + ADMIN_PASSWORD) — tidak pernah memakai sandi demo
+  if (process.env.ADMIN_EMAIL && process.env.ADMIN_PASSWORD) {
+    const ex = await maybe(pool, 'SELECT id FROM users WHERE email=$1', [process.env.ADMIN_EMAIL]);
+    const h = await bcrypt.hash(process.env.ADMIN_PASSWORD, 10);
+    if (!ex) await q(pool, `INSERT INTO users(email, password_hash, name, role) VALUES ($1,$2,$3,'ADMIN')`, [process.env.ADMIN_EMAIL, h, process.env.ADMIN_NAME || 'Admin Supplier.id']);
+  }
+  if (!(await maybe(pool, `SELECT 1 FROM settings WHERE key='fulfillment.pickup_lead_hours'`))) {
+    await q(pool, `INSERT INTO settings(key, value, description) VALUES ('fulfillment.pickup_lead_hours','48','Janji pickup (jam) sejak konfirmasi — dipakai metrik late fulfillment')`);
+  }
+  if (process.env.SEED_DEMO === 'false') return;
   const hash = await bcrypt.hash(DEMO_PASSWORD, 10);
   for (const a of DEMO_ACCOUNTS) {
     if (await maybe(pool, 'SELECT 1 FROM users WHERE email=$1', [a.email])) continue;
@@ -25,9 +35,6 @@ export async function seed() {
       orgId = o.id;
     }
     await q(pool, `INSERT INTO users(email, password_hash, name, role, org_id) VALUES ($1,$2,$3,$4,$5)`, [a.email, hash, a.name, a.role, orgId]);
-  }
-  if (!(await maybe(pool, `SELECT 1 FROM settings WHERE key='fulfillment.pickup_lead_hours'`))) {
-    await q(pool, `INSERT INTO settings(key, value, description) VALUES ('fulfillment.pickup_lead_hours','48','Janji pickup (jam) sejak konfirmasi — dipakai metrik late fulfillment')`);
   }
 }
 

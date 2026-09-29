@@ -121,9 +121,14 @@ function App() {
   );
 }
 
+// SPA fallback GitHub Pages: 404.html mengarahkan ke /supplier-id/?p=<path asli>
+const BASENAME = import.meta.env.BASE_URL.replace(/\/$/, '');
+const sp = new URLSearchParams(window.location.search);
+if (sp.get('p')) window.history.replaceState(null, '', BASENAME + sp.get('p'));
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter basename={BASENAME}>
       <AuthProvider><App /></AuthProvider>
     </BrowserRouter>
   </React.StrictMode>,

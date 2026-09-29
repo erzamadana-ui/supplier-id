@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
-import { errMsg } from '../lib/api';
+import { errMsg, DEMO_MODE } from '../lib/api';
 import { Card, Alert } from '../components/ui';
 
 const DEMO = [
@@ -18,7 +18,7 @@ export default function LoginPage() {
   const { login } = useAuth();
   const nav = useNavigate();
   const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('Password123');
+  const [password, setPassword] = useState(DEMO_MODE ? 'Password123' : '');
   const [err, setErr] = useState('');
   const go = async (e?: string) => {
     setErr('');
@@ -34,10 +34,10 @@ export default function LoginPage() {
           <label className="field"><span className="field-label">Kata sandi</span><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
           <button className="btn" type="submit">Masuk</button>
         </form>
-        <div className="demo">
+        {DEMO_MODE && <div className="demo">
           <small>Akun demo (sandi: Password123):</small>
           {DEMO.map((d) => <button key={d.email} className="btn secondary small" onClick={() => { setEmail(d.email); go(d.email); }}>{d.label}</button>)}
-        </div>
+        </div>}
       </Card>
     </div>
   );

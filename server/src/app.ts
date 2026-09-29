@@ -14,7 +14,8 @@ import { adminRouter } from './routes/admin';
 export function createApp() {
   const app = express();
   app.set('trust proxy', true);
-  app.use(cors());
+  const origins = (process.env.CORS_ORIGINS || '').split(',').map((s) => s.trim()).filter(Boolean);
+  app.use(cors(origins.length ? { origin: origins } : {}));
   app.use(express.json({ limit: '5mb' }));
   app.use(authenticate);
 

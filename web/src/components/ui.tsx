@@ -1,5 +1,5 @@
 import { ReactNode, useEffect, useState } from 'react';
-import { errMsg } from '../lib/api';
+import { errMsg, fileUrl } from '../lib/api';
 
 export function Card({ title, children, actions, className = '' }: { title?: ReactNode; children: ReactNode; actions?: ReactNode; className?: string }) {
   return (
@@ -101,8 +101,8 @@ export function EvidenceGallery({ files, emptyText = 'Belum ada bukti.' }: { fil
       {files.map((f) => (
         <figure key={f.id}>
           {String(f.media_type).startsWith('video/')
-            ? <video src={`/uploads/${f.file_path}`} controls />
-            : <img src={`/uploads/${f.file_path}`} alt={f.kind} />}
+            ? <video src={fileUrl(f.file_path)} controls />
+            : <img src={fileUrl(f.file_path)} alt={f.kind} />}
           <figcaption>
             <b>{f.kind}</b><br />
             <small>diambil: {f.taken_at ? new Date(f.taken_at).toLocaleString('id-ID') : '-'}</small><br />

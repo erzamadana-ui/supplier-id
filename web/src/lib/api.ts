@@ -1,6 +1,11 @@
 export interface AuthUser { id: string; email: string; name: string; role: 'ADMIN' | 'SUPPLIER' | 'BUYER'; orgId: string | null }
 
 const TOKEN_KEY = 'supplierid.token';
+/** Base URL API (kosong = origin yang sama / proxy Vite). Produksi: VITE_API_URL=https://supplier-api.antarkitaindonesia.com */
+export const API_BASE = (import.meta.env.VITE_API_URL || '').replace(/\/$/, '');
+export const DEMO_MODE = import.meta.env.VITE_DEMO === 'true';
+/** URL berkas bukti: URL absolut (Supabase Storage) atau /uploads/<nama> di API. */
+export const fileUrl = (p: string) => (/^https?:\/\//.test(p) ? p : `${API_BASE}/uploads/${p}`);
 export const getToken = () => localStorage.getItem(TOKEN_KEY) || '';
 export const setToken = (t: string) => (t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY));
 
@@ -15,7 +20,7 @@ async function call<T = any>(method: string, url: string, body?: any): Promise<T
   let payload: BodyInit | undefined;
   if (body instanceof FormData) payload = body;
   else if (body !== undefined) { headers['Content-Type'] = 'application/json'; payload = JSON.stringify(body); }
-  const r = await fetch(url, { method, headers, body: payload });
+  const r = await fetch(url.startsWith('/') ? API_BASE + url : url, { method, headers, body: payload });
   const text = await r.text();
   const data = text ? JSON.parse(text) : null;
   if (!r.ok) throw new ApiError(r.status, data?.error || r.statusText, data?.details);

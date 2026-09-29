@@ -10,7 +10,8 @@ types.setTypeParser(1082, (v) => v); // DATE → 'YYYY-MM-DD' apa adanya (tanpa 
 export const DATABASE_URL =
   process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/supplier_id';
 
-export const pool = new Pool({ connectionString: DATABASE_URL, max: 10 });
+const SSL = /sslmode=require|PGSSL/.test(DATABASE_URL + (process.env.PGSSL ?? '')) ? { rejectUnauthorized: false } : undefined;
+export const pool = new Pool({ connectionString: DATABASE_URL, max: 10, ssl: SSL });
 
 export type Db = Pick<PoolClient, 'query'>;
 
@@ -55,7 +56,7 @@ export async function nextNo(db: Db, name: string, prefix: string): Promise<stri
 }
 
 export async function migrate(dbUrl = DATABASE_URL) {
-  const p = new Pool({ connectionString: dbUrl });
+  const p = new Pool({ connectionString: dbUrl, ssl: SSL });
   const c = await p.connect();
   try {
     await c.query(`CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT now())`);
@@ -83,7 +84,7 @@ export async function migrate(dbUrl = DATABASE_URL) {
 }
 
 export async function resetDatabase(dbUrl = DATABASE_URL) {
-  const p = new Pool({ connectionString: dbUrl });
+  const p = new Pool({ connectionString: dbUrl, ssl: SSL });
   await p.query('DROP SCHEMA public CASCADE; CREATE SCHEMA public;');
   await p.end();
 }

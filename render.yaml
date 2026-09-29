@@ -1,0 +1,33 @@
+# Render Blueprint — API Supplier.id (web statis di-host di GitHub Pages: antarkitaindonesia.com/supplier-id)
+services:
+  - type: web
+    name: supplier-id-api
+    runtime: node
+    plan: free
+    rootDir: server
+    buildCommand: npm ci
+    startCommand: npx tsx src/index.ts
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: DATABASE_URL
+        sync: false            # Neon connection string (sslmode=require)
+      - key: JWT_SECRET
+        generateValue: true
+      - key: CORS_ORIGINS
+        value: https://antarkitaindonesia.com,https://www.antarkitaindonesia.com
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: SUPABASE_BUCKET
+        value: supplierid-evidence
+      - key: SEED_DEMO
+        value: "false"
+      - key: ADMIN_EMAIL
+        sync: false
+      - key: ADMIN_PASSWORD
+        sync: false
+      - key: UPLOAD_DIR
+        value: /tmp/supplier-id-uploads

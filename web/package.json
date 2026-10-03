@@ -12,6 +12,8 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/core": "^8.5.2",
     "jsbarcode": "^3.12.3",
     "qrcode": "^1.5.4",
     "react": "^19.3.0",

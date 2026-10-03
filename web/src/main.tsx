@@ -181,6 +181,13 @@ const BASENAME = import.meta.env.BASE_URL.replace(/\/$/, '');
 const sp = new URLSearchParams(window.location.search);
 if (sp.get('p')) window.history.replaceState(null, '', BASENAME + sp.get('p'));
 
+// Android (Capacitor): deep link → rute aplikasi; token push → server (pengiriman push aktif setelah Firebase dikonfigurasi)
+if ((window as any).Capacitor?.isNativePlatform?.()) {
+  import('@capacitor/app').then(({ App }) => {
+    App.addListener('appUrlOpen', ({ url }) => { const m = url.match(/\/supplier-id(\/.*)?$/); if (m) window.history.pushState(null, '', m[1] || '/'); window.dispatchEvent(new PopStateEvent('popstate')); });
+  }).catch(() => undefined);
+}
+
 // PWA: service worker (cache shell + GET API untuk tampilan offline; aksi tulis tidak di-cache)
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`).catch(() => undefined));

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Supplier-ID</string>
+    <string name="title_activity_main">Supplier-ID</string>
+    <string name="package_name">id.supplierid.app</string>
+    <string name="custom_url_scheme">id.supplierid.app</string>
+</resources>

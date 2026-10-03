@@ -1,8 +1,36 @@
-# Laporan Uji — Supplier.id v1 (28 Sep 2026, diperbarui 4 Okt 2026)
+# Laporan Uji — Supplier-ID (v1 28 Sep 2026; v2 4 Okt 2026)
 
 Lingkungan: Node 22.22, PostgreSQL 16.13, Vitest 5. Perintah: `cd server && npm test` → **3 file, 27 test, semua lolos** (unit 10, E2E 17; tambahan 4 Okt: ganti kata sandi + pencabutan sesi, purge data uji dengan rekonsiliasi tetap seimbang). UI smoke test headless Chromium: 24 halaman × 3 peran terbuka tanpa error console/runtime/HTTP 500 (`docs/screenshots/`).
 
-## Pemetaan Definition of Done (bagian W)
+## v2 — hasil uji (4 Okt 2026, commit lihat `git log`, lokal Node 22 + PostgreSQL 16)
+**Otomatis `cd server && npm test`: 4 file, 46 test lolos** (unit 10, E2E v1 17, E2E v2 19). Skenario acceptance v2 → test:
+| Skenario | Test | Hasil |
+|---|---|---|
+| Checkout & payment normal (web/Android = backend sama) | v2 "checkout 2 item dari 2 mitra" | ✅ 1 order induk, 2 suborder, PAID, task ACCEPTANCE per mitra |
+| Dua pembeli stok terakhir | v2 "dua pembeli membeli stok terakhir" | ✅ Promise.all → [201, 409]; stok 0, tidak negatif |
+| Multi-mitra & parsial | checkout multi-mitra + "komplain (partial accept)" | ✅ task/shipment/konfirmasi/payment task per suborder; parsial → task dibuat setelah retur selesai dengan neto setelah potongan |
+| Mitra menolak/terlambat | "mitra menolak → eskalasi"; job `markLateTasks` | ✅ eskalasi, tidak ada alokasi ganda, batal+refund seimbang |
+| Berat aktual berubah | "QC berat kurang/lebih" | ✅ kurang → refund otomatis (ledger seimbang); lebih → PENDING_CUSTOMER; decline → kemas ulang; approve → pembayaran tambahan tercatat |
+| QC/packing gagal → tidak bisa pickup | complete-packing 409 tanpa paket/label; pickup 409 tanpa scan | ✅ |
+| Label & scan | print/reprint, UNKNOWN_CODE, ROLE_NOT_ALLOWED, DUPLICATE_SCAN | ✅ (pembacaan pada perangkat nyata: belum — butuh perangkat Erza) |
+| Konfirmasi < 24 jam → 1 payment task | "konfirmasi sesuai sebelum tenggat" | ✅ tepat satu; konfirmasi ganda 409 |
+| Timeout & konfirmasi bersamaan | settlement_key UNIQUE + ON CONFLICT; payouts.idempotency_key | ✅ (unit: 1 payout per key) |
+| Aplikasi ditutup/server restart | tenggat di DB (`confirmation_due_at`), job dari scheduler eksternal | ✅ job idempotent (`auto` kedua = 0) |
+| Tidak ada konfirmasi > 24 jam | "auto-confirm setelah tenggat"; "foto tanpa OTP → eskalasi" | ✅ |
+| Komplain sebelum jatuh tempo | partial accept menahan; tiket COMPLAINT menahan hold | ✅ |
+| Webhook palsu/duplikat/terlambat | "webhook pembayaran" | ✅ 401 / duplicate / IGNORED_STATUS_PAID |
+| Payout timeout/failed/reversed | provider NONE 409; MOCK PROCESSING→inquiry→PAID; proses ganda 409; reversal jurnal pembalik | ✅ |
+| Refund/chargeback setelah payout | reversal + eskalasi PAYOUT_FAILED | ✅ (kebijakan recovery = keputusan bisnis) |
+| Akses lintas mitra | task 403, label 403, tiket 403, scan NOT_YOUR_PACKAGE | ✅ |
+| Jaringan buruk/offline | SW cache GET; mutasi tidak di-cache; status final server | ✅ desain; uji perangkat belum |
+| Backup/restore & rollback | migrasi aditif; Neon branch/pg_dump (runbook) | ⚠ prosedur ditulis, **belum dibuktikan** di lingkungan uji |
+| Model dagang RESELLER | "kategori RESELLER" | ✅ harga ×1,2, fee 0, ledger payable=harga beli, margin, pembatalan seimbang |
+
+**UI (Playwright, lokal):** smoke 120 halaman × 4 lebar (360/390/768/1440) tanpa error konsol/overflow (`docs/screenshots-v2/smoke-report.json`); journey 20 langkah lintas peran (katalog → keranjang → checkout → bayar → terima → picking → QC+foto → packing → label QR/Code128 → cetak tercatat → dispatch → scan pickup → OTP serah terima → countdown konfirmasi → terima → payment task → maker → checker → dibayar) **20/20 lolos** (`journey_*.png`).
+
+**Belum/blocker jujur:** APK dibangun lewat GitHub Actions (SDK diblokir di sandbox) — belum ada bukti instalasi di perangkat; push notification butuh Firebase; pembacaan barcode di printer/scanner nyata; backup/restore belum dibuktikan; payment gateway & payout provider nyata belum ada; UAT dengan dataset nyata belum.
+
+## Pemetaan Definition of Done v1 (bagian W)
 
 | # | Butir DoD | Test | Hasil |
 |---|---|---|---|

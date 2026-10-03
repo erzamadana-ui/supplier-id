@@ -88,3 +88,46 @@ Status order: DRAFT → PENDING_PAYMENT → PAID → PACKING → PICKED_UP → I
 | GET | /admin/test-data | pratinjau data uji (org bernama `UJI …` / email `uji-*@supplier.id`): `{organizations[],orders,evidence_files,ledger_journals}` |
 | POST | /admin/test-data/purge | `{confirm:'HAPUS DATA UJI'}` — hapus transaksional seluruh data uji (org, user, produk, batch, order, bukti + objek Storage, ledger, payout, override fee) → `{organizations,orders,evidence_files,storage_objects,reconciliation}` |
 | GET | /admin/monetization?from=&to= | `{cards:{gmv,paid_orders,product_value,platform_fee_revenue,average_take_rate_pct,packaging_revenue,packaging_cost,packaging_profit,logistics_revenue,logistics_cost,logistics_margin,payment_fees_collected,payment_processing_fee,optional_service_revenue,promotion_discount,tax,refunds,return_cases,return_cost,logistics_recovery,supplier_payable,net_revenue}, charts:{gmv_by_day[{day,gmv,revenue,platform_fee}],revenue_by_category[],revenue_by_buyer[],revenue_by_supplier[]}, current_platform_fee, reconciliation}` |
+
+## v2 — Supplier-ID (4 Okt 2026)
+Peran baru `COURIER`; admin memiliki `admin_role` + `permissions` (lihat `GET /admin/roles`). Error izin: 403 `PERMISSION_REQUIRED {required[]}`.
+
+### Katalog & pelanggan
+| GET | /public/stats | wilayah mitra aktif, mitra terverifikasi, listing siap |
+| GET | /listings, /listings/:id | + `price_per_unit` sudah memperhitungkan model dagang kategori (RESELLER = harga mitra × (1+markup)), `trade_model`, `photo`, `min_order_qty` |
+| GET/POST/DELETE | /cart, /cart/items, /cart/items/:batchId | keranjang BUYER (UNIQUE buyer+batch) |
+| POST | /checkout/preview | rincian per suborder + total + `confirmation_window_hours`, `auto_confirm_enabled`, `payment_expiry_hours` |
+| POST | /checkout | `{address_id|delivery_address, items?, optional_service_codes, promo_code, accept_auto_confirm_policy:true, accept_weight_tolerance:true}` → `{group, orders[]}` (reservasi stok atomik per suborder; gagal satu → batal semua) |
+| GET | /order-groups, /order-groups/:id · POST /order-groups/:id/pay | order induk; bayar sandbox (`is_sandbox`) |
+| GET/POST/DELETE | /me/addresses(/:id) · GET /me/notifications · POST /me/notifications/read · POST /me/push-token | |
+| GET | /orders/:id/delivery-otp | BUYER: OTP penerimaan (6 digit, hash di server, diterbitkan ulang tiap permintaan) |
+| POST | /orders/:id/weight-decision | `{decision:'APPROVE'|'DECLINE'}` kelebihan berat di luar toleransi |
+
+### Mitra — task inbox, QC, paket, label, scan
+| GET | /tasks?status=&stage= · GET /tasks/:id | inbox + detail (events, qc_records, packages, evidence, pipeline) |
+| POST | /tasks/:id/accept `{ready_at?}` · /reject `{reason}` · /start · /complete `{result?}` | ACCEPTANCE → PICKING/PRODUCTION → QC |
+| POST | /tasks/:id/qc | `{measured_quantity?, measured_weight_kg?, measured_temperature_c?, grade?, passed, reject_reason?}` (foto QC wajib: evidence owner_type `QC`, kind `QC_PHOTO`) → `weight_adjustment` {WITHIN_TOLERANCE|SHORTAGE_REFUND|PENDING_CUSTOMER} |
+| POST | /tasks/:id/packages `{quantity, weight_kg?, shelf_life_days?, expiry_date?, storage_instructions?}` · /tasks/:id/complete-packing | paket PKG-…; selesai packing wajib semua kuantitas terkemas & label tercetak |
+| GET | /packages/:id/label · POST /packages/:id/print `{template:'A4'|'THERMAL80', reason?}` · POST /packages/:id/cancel `{reason}` | data label (qr_payload `SID:PKG:<no>`, code128); reprint wajib alasan & menaikkan versi |
+| POST | /scan `{code, action:'HANDOVER'|'PICKUP'|'DELIVER'|'RECEIVE', shipment_id?, location?}` | 200 OK / 422 REJECTED {reason: UNKNOWN_CODE|ROLE_NOT_ALLOWED|NOT_YOUR_PACKAGE|PACKAGE_CANCELLED|DUPLICATE_SCAN|ILLEGAL_STATE_*|NOT_IN_YOUR_MANIFEST} — selalu dicatat |
+| GET | /scans?result= · /trace/batch/:batchId · /public/packages/:packageNo | laporan scan; telusur batch→order→paket→pelanggan; info aman untuk QR publik |
+| PUT | /supplier/bank-account · GET /supplier/payment-tasks | rekening (reset verifikasi, audit) & pembayaran per pesanan |
+
+### Dispatch & kurir
+| GET | /dispatch/ready · POST /dispatch/orders/:id/assign `{courier_user_id, carrier?, vehicle?, cold_chain?}` | shipment SCHEDULED + OTP ke pelanggan |
+| GET | /courier/shipments(/:id) · POST /courier/shipments/:id/pickup · /events · /deliver `{otp?, recipient_name}` · /fail `{reason}` · /redeliver | pickup/deliver mensyaratkan semua paket terpindai; OTP sah → `delivered_at`, `confirmation_due_at` |
+| POST | /admin/shipments/:id/verify-evidence `{valid, note?}` | foto kurir → sah (jendela mulai) / tidak sah (hold) |
+
+### Finance — payment task
+| GET | /finance/payment-tasks?status= · /finance/payment-tasks/:id | + `ledger_net` dari ledger |
+| POST | /finance/payment-tasks/:id/submit (payouts.make) · /approve · /reject `{reason}` (payouts.check, ≠ maker) · /hold `{reason}` · /release · /process (payouts.process; provider via setting `payout.provider`) · /inquiry · /mark-paid `{bank_ref}` (checker, provider NONE) · /reverse `{reason}` | lihat state machine PRD-V2 |
+| POST | /admin/orders/:id/ops-confirm `{note}` | konfirmasi atas nama pelanggan (eskalasi) |
+
+### Ops, tiket, staf, job, webhook
+| GET | /admin/ops-dashboard · /admin/escalations?status= · POST /admin/escalations/:id/resolve `{resolution, clear_hold?}` | |
+| GET/POST/PATCH | /tickets(/:id) · POST /tickets/:id/messages `{body, internal?}` | COMPLAINT menahan payment task sampai ditutup |
+| GET/POST/PATCH | /admin/users(/:id) · GET /admin/roles · POST /admin/organizations/:id/verify-bank | staf/kurir; maker ≠ checker |
+| POST | /jobs/run (header `x-job-secret`) · GET /jobs/runs | job durable idempotent |
+| POST | /webhooks/payment | HMAC-SHA256 header `x-signature` atas body mentah; dedup `event_id`; status ilegal diabaikan |
+| PUT | /admin/categories/:code | + `trade_model`, `reseller_markup_pct`, `storage_instructions`, `shelf_life_days_default`, `complaint_window_hours` |
+| GET | /admin/test-data · POST /admin/test-data/purge | mencakup tabel v2 |

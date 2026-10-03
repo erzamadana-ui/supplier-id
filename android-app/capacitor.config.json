@@ -1,0 +1,8 @@
+{
+  "appId": "id.supplierid.app",
+  "appName": "Supplier-ID",
+  "webDir": "www",
+  "android": { "allowMixedContent": false, "backgroundColor": "#f7f6f1" },
+  "server": { "androidScheme": "https" },
+  "plugins": {}
+}

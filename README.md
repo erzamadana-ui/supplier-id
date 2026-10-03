@@ -1,4 +1,6 @@
-# Supplier.id — Marketplace B2B Hasil Tani, Ternak & Laut
+# Supplier-ID — Platform Hasil Tani, Ternak & Laut (v2)
+
+v2 (4 Okt 2026): pelanggan B2C+B2B, task inbox mitra, QC berat aktual, paket/label/scan, kurir + OTP, konfirmasi 24 jam, payment task maker/checker, PWA, Android (Capacitor). Dokumen: `docs/AUDIT-GAP-V2.md`, `KEPUTUSAN-V2.md`, `PRD-V2.md`, `DESIGN-SYSTEM.md`, `RUNBOOK-V2.md`, `LAPORAN-UJI.md`, `API.md`.
 
 Prinsip: **DECLARE → PROVE → DELIVER → INSPECT → EVIDENCE → SETTLE**
 
@@ -8,7 +10,9 @@ Monorepo:
 |---|---|
 | `server/` | API Node.js 22 + Express 4 + TypeScript, PostgreSQL 16 (driver `pg`, migrasi SQL murni), Vitest (unit + E2E) |
 | `web/` | Frontend React 18 + TypeScript + Vite + react-router (Portal Supplier, Portal Buyer, Admin Panel) |
-| `docs/` | `API.md` (referensi endpoint), `ARSITEKTUR.md`, `LAPORAN-UJI.md`, `screenshots/` |
+| `docs/` | `API.md`, `ARSITEKTUR.md`, `LAPORAN-UJI.md`, `PRD-V2.md`, `DESIGN-SYSTEM.md`, `RUNBOOK-V2.md`, `screenshots/`, `screenshots-v2/` |
+| `android-app/` | Pembungkus Capacitor (APK/AAB dibangun GitHub Actions `android.yml`) |
+| `.github/workflows/` | `android.yml` (APK/AAB), `jobs-cron.yml` (job konfirmasi/payout tiap 10 menit) |
 | `docker-compose.yml` | PostgreSQL lokal |
 
 ## Menjalankan (lokal)

@@ -28,7 +28,11 @@ Lingkungan: Node 22.22, PostgreSQL 16.13, Vitest 5. Perintah: `cd server && npm 
 
 **UI (Playwright, lokal):** smoke 120 halaman × 4 lebar (360/390/768/1440) tanpa error konsol/overflow (`docs/screenshots-v2/smoke-report.json`); journey 20 langkah lintas peran (katalog → keranjang → checkout → bayar → terima → picking → QC+foto → packing → label QR/Code128 → cetak tercatat → dispatch → scan pickup → OTP serah terima → countdown konfirmasi → terima → payment task → maker → checker → dibayar) **20/20 lolos** (`journey_*.png`).
 
-**Belum/blocker jujur:** APK dibangun lewat GitHub Actions (SDK diblokir di sandbox) — belum ada bukti instalasi di perangkat; push notification butuh Firebase; pembacaan barcode di printer/scanner nyata; backup/restore belum dibuktikan; payment gateway & payout provider nyata belum ada; UAT dengan dataset nyata belum.
+**Produksi (4 Okt 2026, diverifikasi lewat browser):** API `GET /api/health` ok, `GET /api/public/stats` (endpoint v2 → migrasi 0004/0005 terpasang), login admin OWNER, dashboard Operasional, Staf, Konfigurasi, serta endpoint `admin/ops-dashboard`, `jobs/runs`, `admin/roles`, `admin/users`, `finance/payment-tasks`, `admin/escalations`, `tickets`, `dispatch/ready`, `admin/categories` semua 200. Env `JOB_SECRET` + `PAYMENT_WEBHOOK_SECRET` terpasang di Vercel; `POST /api/jobs/run` tanpa secret ditolak; GitHub Actions `jobs-cron.yml` (secret repo `JOB_SECRET`) berjalan sukses dan tercatat di `job_runs` ("Job terakhir … cron" pada dashboard ops).
+
+**Android (4 Okt 2026):** workflow `android.yml` run #37160140697 (commit `ff1bab1`) **BUILD SUCCESSFUL** setelah dua perbaikan CI (paket SDK eksplisit tanpa `tools` usang; Java 21 untuk Capacitor 8). Artefak: `supplier-id-app-debug-apk` (3,9 MB) dan `supplier-id-app-release-aab-unsigned` (3,0 MB) — unduh dari tab Actions repo `erzamadana-ui/supplier-id`. **Belum dibuktikan:** instalasi & uji di perangkat Android nyata (kamera scan, deep link `https://antarkitaindonesia.com/supplier-id/*`), penandatanganan AAB untuk Play Store.
+
+**Belum/blocker jujur:** uji APK di perangkat nyata; push notification butuh Firebase (token tersimpan, pengiriman belum); pembacaan barcode di printer/scanner nyata; backup/restore belum dibuktikan; payment gateway & payout provider nyata belum ada (sandbox/manual); UAT dengan dataset & mitra nyata belum; staf ops/finance/kurir produksi belum dibuat (hanya akun OWNER).
 
 ## Pemetaan Definition of Done v1 (bagian W)
 

@@ -10,7 +10,7 @@ Dasar fakta: repo `erzamadana-ui/supplier-id` commit `b34961a` (live di https://
 | Hosting | API: Vercel Hobby serverless (cold start 3–8 dtk, **non-komersial per ToS**); Web: GitHub Pages; DB: Neon free (sleep saat idle); Storage: Supabase (bucket publik) | Job durable (konfirmasi 24 jam, payout) **tidak bisa** bergantung pada proses long-running di serverless Hobby → perlu cron eksternal / Vercel Cron (Pro) / worker terpisah |
 | Auth | JWT 7 hari + verifikasi DB (`token_version`), bcrypt; peran `ADMIN`/`SUPPLIER`/`BUYER` | Belum ada MFA, belum ada peran kurir/CS/finance maker-checker/auditor |
 | Integrasi | Payment **mock** (instan), kurir **mock**, payout **mock** (`TRF-…` instan `PAID`) | Semua harus gagal jelas bila belum dikonfigurasi (v2) |
-| Android | Tidak ada. Toolchain: Java 21 + Gradle 8.14 tersedia di sandbox, **tetapi dl.google.com, maven.google.com, repo1.maven.org, plugins.gradle.org diblokir proxy (403)** — juga dari VM Mac | APK hanya bisa dibangun lewat **GitHub Actions** (runner ubuntu punya Android SDK). Blocker: PAT perlu izin *Workflows* atau Erza yang push file workflow |
+| Android | Tidak ada. Toolchain: Java 21 + Gradle 8.14 tersedia di sandbox, **tetapi dl.google.com, maven.google.com, repo1.maven.org, plugins.gradle.org diblokir proxy (403)** — juga dari VM Mac | APK dibangun lewat **GitHub Actions** (`android.yml`, run sukses 4 Okt 2026 commit `ff1bab1`: APK debug 3,9 MB + AAB unsigned 3,0 MB). Sisa: uji di perangkat nyata & penandatanganan AAB |
 
 ## 2. Aset identitas visual [FAKTA — 3 gambar diunggah 4 Okt]
 Tidak ada file font, logo vektor, atau file Figma/template Supplier-ID. Tiga gambar referensi (bukan template Supplier-ID):

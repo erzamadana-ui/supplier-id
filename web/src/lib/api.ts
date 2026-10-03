@@ -27,16 +27,33 @@ async function call<T = any>(method: string, url: string, body?: any): Promise<T
   return data as T;
 }
 
+let _mode: Promise<'direct' | 'multipart'> | null = null;
+const uploadMode = () => (_mode ??= call<{ mode: 'direct' | 'multipart' }>('GET', '/api/evidence/mode').then((r) => r.mode).catch(() => 'multipart' as const));
+
 export const api = {
   get: <T = any>(url: string) => call<T>('GET', url),
   post: <T = any>(url: string, body?: any) => call<T>('POST', url, body ?? {}),
   put: <T = any>(url: string, body?: any) => call<T>('PUT', url, body ?? {}),
   patch: <T = any>(url: string, body?: any) => call<T>('PATCH', url, body ?? {}),
-  /** Unggah bukti foto/video. meta: owner_type, kind, batch_id/order_id, taken_at, lat, lng, location_consent */
-  upload: (file: File, meta: Record<string, any>) => {
+  /**
+   * Unggah bukti foto/video. meta: owner_type, kind, batch_id/order_id, taken_at, lat, lng, location_consent.
+   * Mode 'direct' (produksi): minta signed URL → unggah langsung ke Supabase Storage → catat metadata. Mode 'multipart' (lokal): lewat API.
+   */
+  upload: async (file: File, meta: Record<string, any>) => {
+    const clean: Record<string, any> = {};
+    for (const [k, v] of Object.entries(meta)) if (v !== undefined && v !== null && v !== '') clean[k] = v;
+    if ((await uploadMode()) === 'direct') {
+      const mediaType = file.type || (/\.(mp4|mov|webm)$/i.test(file.name) ? 'video/mp4' : 'image/jpeg');
+      const signed = await call<{ key: string; upload_url: string }>('POST', '/api/evidence/sign', { filename: file.name, media_type: mediaType });
+      const put = await fetch(signed.upload_url, { method: 'PUT', headers: { 'Content-Type': mediaType, 'x-upsert': 'true' }, body: file });
+      if (!put.ok) throw new ApiError(put.status, 'UPLOAD_TO_STORAGE_FAILED', await put.text().catch(() => undefined));
+      let sha256: string | undefined;
+      try { const buf = await file.arrayBuffer(); const h = await crypto.subtle.digest('SHA-256', buf); sha256 = Array.from(new Uint8Array(h)).map((b) => b.toString(16).padStart(2, '0')).join(''); } catch { /* opsional */ }
+      return call('POST', '/api/evidence/complete', { ...clean, key: signed.key, media_type: mediaType, sha256 });
+    }
     const fd = new FormData();
     fd.append('file', file);
-    for (const [k, v] of Object.entries(meta)) if (v !== undefined && v !== null && v !== '') fd.append(k, String(v));
+    for (const [k, v] of Object.entries(clean)) fd.append(k, String(v));
     return call('POST', '/api/evidence', fd);
   },
 };

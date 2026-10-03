@@ -6,7 +6,7 @@ import crypto from 'node:crypto';
 import { z } from 'zod';
 import { pool, q, one, maybe } from '../db';
 import { asyncH, parse, bad, forbidden, requireRole } from '../lib/http';
-import { storeEvidence } from '../lib/storage';
+import { storeEvidence, storageMode, createSignedUpload, objectExists, publicUrl } from '../lib/storage';
 
 export const UPLOAD_DIR = process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads');
 fs.mkdirSync(UPLOAD_DIR, { recursive: true });
@@ -78,6 +78,54 @@ evidenceRouter.post('/', requireRole('SUPPLIER', 'BUYER', 'ADMIN'), upload.singl
        order_id, shipment_id, inspection_id, return_case_id, taken_at, uploaded_by, lat, lng, location_consent)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
     [m.owner_type, m.kind, req.file.mimetype, storedPath, sha, supplierId, buyerId, productId, m.batch_id ?? null, harvestId,
+      m.order_id ?? null, m.shipment_id ?? null, m.inspection_id ?? null, m.return_case_id ?? null,
+      m.taken_at ? new Date(m.taken_at) : null, u.id, consent ? m.lat ?? null : null, consent ? m.lng ?? null : null, consent],
+  );
+  res.status(201).json(row);
+}));
+
+/** Mode unggah: 'direct' → klien minta signed URL lalu unggah langsung ke Supabase; 'multipart' → lewat API. */
+evidenceRouter.get('/mode', (_req, res) => res.json({ mode: storageMode === 'supabase' ? 'direct' : 'multipart', max_multipart_mb: 200 }));
+
+/** Langkah 1 unggah langsung: minta signed upload URL. */
+evidenceRouter.post('/sign', requireRole('SUPPLIER', 'BUYER', 'ADMIN'), asyncH(async (req, res) => {
+  const { filename, media_type } = parse(z.object({ filename: z.string().min(1), media_type: z.string().regex(/^(image|video)\//) }), req.body);
+  const ext = path.extname(filename || '').toLowerCase().slice(0, 8) || (media_type.startsWith('video/') ? '.mp4' : '.jpg');
+  res.json(await createSignedUpload(ext));
+}));
+
+/** Langkah 2 unggah langsung: catat metadata bukti setelah objek ada di Storage. */
+evidenceRouter.post('/complete', requireRole('SUPPLIER', 'BUYER', 'ADMIN'), asyncH(async (req, res) => {
+  const m = parse(metaSchema.extend({ key: z.string().min(3), media_type: z.string().regex(/^(image|video)\//), sha256: z.string().optional() }), req.body);
+  if (m.is_stock_image) throw bad('STOCK_IMAGE_NOT_ALLOWED', 'Foto deklarasi kualitas harus foto aktual barang/batch yang dijual');
+  const isVideo = m.media_type.startsWith('video/');
+  if (['RECEIVING_VIDEO', 'RETURN_VIDEO'].includes(m.kind) && !isVideo) throw bad('VIDEO_REQUIRED_FOR_KIND');
+  if (!['RECEIVING_VIDEO', 'RETURN_VIDEO', 'OTHER'].includes(m.kind) && isVideo) throw bad('IMAGE_REQUIRED_FOR_KIND');
+  const ex = await objectExists(m.key);
+  if (!ex.ok) throw bad('OBJECT_NOT_FOUND', 'Berkas belum terunggah ke Storage');
+  let supplierId: string | null = null, buyerId: string | null = null, productId: string | null = null, harvestId: string | null = null;
+  const u = req.user!;
+  if (m.batch_id) {
+    const b = await one(pool, 'SELECT * FROM batches WHERE id=$1', [m.batch_id]);
+    if (u.role === 'SUPPLIER' && b.supplier_id !== u.orgId) throw forbidden();
+    supplierId = b.supplier_id; productId = b.product_id;
+    const h = await maybe(pool, 'SELECT id FROM harvests WHERE batch_id=$1', [b.id]);
+    harvestId = h?.id ?? null;
+  }
+  if (m.order_id) {
+    const o = await one(pool, 'SELECT * FROM orders WHERE id=$1', [m.order_id]);
+    if (u.role === 'BUYER' && o.buyer_id !== u.orgId) throw forbidden();
+    if (u.role === 'SUPPLIER' && o.supplier_id !== u.orgId) throw forbidden();
+    buyerId = o.buyer_id; supplierId = o.supplier_id; productId = o.product_id;
+    m.batch_id = m.batch_id ?? o.batch_id;
+  }
+  const consent = !!m.location_consent;
+  const row = await one(
+    pool,
+    `INSERT INTO evidence_files(owner_type, kind, media_type, file_path, sha256, supplier_id, buyer_id, product_id, batch_id, harvest_id,
+       order_id, shipment_id, inspection_id, return_case_id, taken_at, uploaded_by, lat, lng, location_consent)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) RETURNING *`,
+    [m.owner_type, m.kind, m.media_type, publicUrl(m.key), m.sha256 ?? null, supplierId, buyerId, productId, m.batch_id ?? null, harvestId,
       m.order_id ?? null, m.shipment_id ?? null, m.inspection_id ?? null, m.return_case_id ?? null,
       m.taken_at ? new Date(m.taken_at) : null, u.id, consent ? m.lat ?? null : null, consent ? m.lng ?? null : null, consent],
   );

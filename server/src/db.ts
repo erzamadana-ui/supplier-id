@@ -60,7 +60,9 @@ export async function migrate(dbUrl = DATABASE_URL) {
   const c = await p.connect();
   try {
     await c.query(`CREATE TABLE IF NOT EXISTS schema_migrations (name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT now())`);
-    const dir = path.join(__dirname, '..', 'migrations');
+    const candidates = [process.env.MIGRATIONS_DIR, path.join(__dirname, '..', 'migrations'), path.join(process.cwd(), 'migrations'), path.join(process.cwd(), 'server', 'migrations')].filter(Boolean) as string[];
+    const dir = candidates.find((d) => fs.existsSync(d));
+    if (!dir) throw new Error('MIGRATIONS_DIR_NOT_FOUND: ' + candidates.join(', '));
     const files = fs.readdirSync(dir).filter((f) => f.endsWith('.sql')).sort();
     for (const f of files) {
       const done = await c.query('SELECT 1 FROM schema_migrations WHERE name=$1', [f]);

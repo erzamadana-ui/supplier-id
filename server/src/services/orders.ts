@@ -3,11 +3,23 @@ import { conflict, money } from '../lib/http';
 import { computePricing, loadPricingConfig, PricingResult } from './pricing';
 
 export interface OrderContext {
-  batch: any; supplierOrg: any; buyerOrg: any; category: { id: string; tax_class: string };
+  batch: any; supplierOrg: any; buyerOrg: any; category: { id: string; tax_class: string; trade_model?: string; reseller_markup_pct?: number };
   quantity: number; unitPrice: number; distanceKm: number; optionalServiceCodes: string[]; promoCode: string | null; at?: Date;
+  platformTaxStatus?: 'PKP' | 'NON_PKP';
 }
 
-export async function priceOrder(db: Db, ctx: OrderContext): Promise<PricingResult> {
+/** Model dagang hibrida: RESELLER → harga jual = harga mitra × (1 + markup), platform fee 0, penjual produk = Supplier-ID. */
+export function resolveTradeModel(ctx: Pick<OrderContext, 'category' | 'batch'>, unitPrice?: number) {
+  const model = ctx.category.trade_model === 'RESELLER' ? 'RESELLER' : 'MARKETPLACE';
+  const purchaseUnitPrice = Number(ctx.batch.price_per_unit);
+  if (model === 'RESELLER') {
+    const markup = Number(ctx.category.reseller_markup_pct ?? 0);
+    return { model, purchaseUnitPrice, unitPrice: money(purchaseUnitPrice * (1 + markup / 100)), markupPct: markup };
+  }
+  return { model, purchaseUnitPrice: null as number | null, unitPrice: unitPrice ?? purchaseUnitPrice, markupPct: 0 };
+}
+
+export async function priceOrder(db: Db, ctx: OrderContext): Promise<PricingResult & { tradeModel: string; purchaseUnitPrice: number | null; purchaseValue: number | null; resellerMargin: number }> {
   const weightKg = ctx.batch.expected_weight_kg && ctx.batch.quantity > 0
     ? money((Number(ctx.batch.expected_weight_kg) / Number(ctx.batch.quantity)) * ctx.quantity)
     : ctx.batch.unit === 'KG' ? ctx.quantity : ctx.quantity; // asumsi 1 unit ≈ 1 kg jika berat tidak dideklarasikan
@@ -15,11 +27,16 @@ export async function priceOrder(db: Db, ctx: OrderContext): Promise<PricingResu
     at: ctx.at, categoryId: ctx.category.id, supplierId: ctx.supplierOrg.id, buyerId: ctx.buyerOrg.id,
     promoCode: ctx.promoCode ?? undefined, region: ctx.supplierOrg.region ?? undefined, productValue: ctx.quantity * ctx.unitPrice,
   });
-  return computePricing({
-    quantity: ctx.quantity, unitPrice: ctx.unitPrice, weightKg, distanceKm: ctx.distanceKm,
+  const tm = resolveTradeModel(ctx, ctx.unitPrice);
+  if (tm.model === 'RESELLER') cfg.platformFee = { ...cfg.platformFee, rate_percent: 0, scope_type: 'RESELLER', scope_ref: 'markup:' + tm.markupPct };
+  const pr = computePricing({
+    quantity: ctx.quantity, unitPrice: tm.unitPrice, weightKg, distanceKm: ctx.distanceKm,
     optionalServiceCodes: ctx.optionalServiceCodes, promoCode: ctx.promoCode,
-    sellerTaxStatus: ctx.supplierOrg.tax_status, buyerTaxStatus: ctx.buyerOrg.tax_status, categoryTaxClass: ctx.category.tax_class,
+    sellerTaxStatus: tm.model === 'RESELLER' ? (ctx.platformTaxStatus ?? 'NON_PKP') : ctx.supplierOrg.tax_status,
+    buyerTaxStatus: ctx.buyerOrg.tax_status, categoryTaxClass: ctx.category.tax_class,
   }, cfg);
+  const purchaseValue = tm.model === 'RESELLER' ? money(tm.purchaseUnitPrice! * ctx.quantity) : null;
+  return { ...pr, tradeModel: tm.model, purchaseUnitPrice: tm.purchaseUnitPrice, purchaseValue, resellerMargin: purchaseValue != null ? money(pr.productValue - purchaseValue) : 0 };
 }
 
 export function weightOf(batch: any, quantity: number) {
@@ -31,10 +48,13 @@ export function weightOf(batch: any, quantity: number) {
 export const ALLOWED: Record<string, string[]> = {
   DRAFT: ['PENDING_PAYMENT', 'CANCELLED'],
   PENDING_PAYMENT: ['PAID', 'CANCELLED'],
-  PAID: ['PACKING', 'CANCELLED'],
-  PACKING: ['PICKED_UP', 'CANCELLED'],
-  PICKED_UP: ['IN_TRANSIT', 'ARRIVED_WAITING_INSPECTION'],
-  IN_TRANSIT: ['ARRIVED_WAITING_INSPECTION'],
+  PAID: ['PROCESSING', 'PACKING', 'CANCELLED'],
+  PROCESSING: ['PACKING', 'CANCELLED'],
+  PACKING: ['READY_FOR_PICKUP', 'PICKED_UP', 'CANCELLED'],
+  READY_FOR_PICKUP: ['PICKED_UP', 'CANCELLED'],
+  PICKED_UP: ['IN_TRANSIT', 'ARRIVED_WAITING_INSPECTION', 'DELIVERY_FAILED'],
+  IN_TRANSIT: ['ARRIVED_WAITING_INSPECTION', 'DELIVERY_FAILED'],
+  DELIVERY_FAILED: ['IN_TRANSIT', 'ARRIVED_WAITING_INSPECTION', 'CANCELLED'],
   ARRIVED_WAITING_INSPECTION: ['ACCEPTED', 'PARTIALLY_ACCEPTED', 'REJECTED'],
   ACCEPTED: ['SETTLED'],
   PARTIALLY_ACCEPTED: ['DISPUTED', 'SETTLED'],

@@ -100,7 +100,12 @@ export async function applyReturnAdjustment(db: Db, orderId: string, returnCaseI
   for (const c of adj.components) {
     if (c.refund <= 0) continue;
     if (c.component === 'PRODUCT') {
-      if (c.bearer === 'SUPPLIER') entries.push({ account: 'SUPPLIER_PAYABLE', component: 'RETURN_ADJUSTMENT', side: 'DEBIT', amount: c.refund, partyType: 'SUPPLIER', partyId: S, memo: 'Potongan hak supplier atas barang ditolak' });
+      if (c.bearer === 'SUPPLIER' && order.trade_model === 'RESELLER' && Number(order.purchase_value) > 0) {
+        // RESELLER: hak mitra dipotong proporsional harga beli; sisa refund membalik margin Supplier-ID
+        const supplierPart = money(c.refund * (Number(order.purchase_value) / Number(order.product_value)));
+        entries.push({ account: 'SUPPLIER_PAYABLE', component: 'RETURN_ADJUSTMENT', side: 'DEBIT', amount: supplierPart, partyType: 'SUPPLIER', partyId: S, memo: 'Potongan hak mitra (harga beli) atas barang ditolak' });
+        entries.push({ account: 'RESELLER_MARGIN_REVENUE', component: 'RESELLER_MARGIN', side: 'DEBIT', amount: money(c.refund - supplierPart), partyType: 'PLATFORM', memo: 'Pembalikan margin reseller atas barang ditolak' });
+      } else if (c.bearer === 'SUPPLIER') entries.push({ account: 'SUPPLIER_PAYABLE', component: 'RETURN_ADJUSTMENT', side: 'DEBIT', amount: c.refund, partyType: 'SUPPLIER', partyId: S, memo: 'Potongan hak supplier atas barang ditolak' });
       else if (c.bearer === 'LOGISTICS') entries.push({ account: 'LOGISTICS_RECEIVABLE', component: 'LOGISTICS_RECOVERY', side: 'DEBIT', amount: c.refund, partyType: 'PLATFORM', memo: 'Piutang klaim ke penyedia logistik' });
       else entries.push({ account: 'RETURN_ADJUSTMENT', component: 'RETURN_ADJUSTMENT', side: 'DEBIT', amount: c.refund, partyType: 'PLATFORM', memo: 'Kerugian retur ditanggung platform' });
     } else {

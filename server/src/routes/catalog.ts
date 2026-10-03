@@ -33,8 +33,11 @@ catalogRouter.get('/listings', asyncH(async (req, res) => {
   if (status) { params.push(status); where.push(`b.status=$${params.length}`); }
   const rows = await q(
     pool,
-    `SELECT b.*, p.name AS product_name, p.commodity, p.variety, p.origin, p.production_method, p.certification,
-            c.code AS category_code, c.name AS category_name, o.name AS supplier_name, o.region AS supplier_region, o.status AS supplier_status,
+    `SELECT b.*, p.name AS product_name, p.commodity, p.variety, p.origin, p.production_method, p.certification, p.image_url, p.sku, p.storage_instructions,
+            c.code AS category_code, c.name AS category_name, c.trade_model, c.storage_instructions AS category_storage,
+            CASE WHEN c.trade_model='RESELLER' THEN ROUND(b.price_per_unit * (1 + c.reseller_markup_pct/100), 2) ELSE b.price_per_unit END AS price_per_unit,
+            (SELECT file_path FROM evidence_files e WHERE e.batch_id=b.id AND e.owner_type='BATCH' ORDER BY e.uploaded_at LIMIT 1) AS photo,
+            o.name AS supplier_name, o.region AS supplier_region, o.status AS supplier_status,
             o.supplier_kind, o.verified AS supplier_verified,
             (SELECT COUNT(*) FROM evidence_files e WHERE e.batch_id=b.id AND e.owner_type IN ('BATCH','HARVEST_CURRENT','HARVEST_PRE','HARVEST_FINAL'))::int AS photo_count,
             (SELECT score FROM supplier_quality_scores s WHERE s.supplier_id=o.id ORDER BY computed_at DESC LIMIT 1) AS supplier_quality_score,
@@ -51,8 +54,10 @@ catalogRouter.get('/listings', asyncH(async (req, res) => {
 catalogRouter.get('/listings/:batchId', asyncH(async (req, res) => {
   const b = await one(
     pool,
-    `SELECT b.*, p.name AS product_name, p.commodity, p.variety, p.origin, p.production_method, p.certification, p.category_id,
-            c.code AS category_code, c.name AS category_name, c.attribute_schema, o.name AS supplier_name, o.region AS supplier_region,
+    `SELECT b.*, p.name AS product_name, p.commodity, p.variety, p.origin, p.production_method, p.certification, p.category_id, p.image_url, p.sku, p.storage_instructions,
+            c.code AS category_code, c.name AS category_name, c.attribute_schema, c.trade_model, c.storage_instructions AS category_storage, c.shelf_life_days_default,
+            CASE WHEN c.trade_model='RESELLER' THEN ROUND(b.price_per_unit * (1 + c.reseller_markup_pct/100), 2) ELSE b.price_per_unit END AS price_per_unit,
+            o.name AS supplier_name, o.region AS supplier_region,
             o.status AS supplier_status, o.supplier_kind, o.tax_status AS supplier_tax_status
      FROM batches b JOIN products p ON p.id=b.product_id JOIN categories c ON c.id=p.category_id JOIN organizations o ON o.id=b.supplier_id
      WHERE b.id=$1`,

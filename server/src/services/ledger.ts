@@ -7,12 +7,12 @@ import { bad, money } from '../lib/http';
 
 export type Account =
   | 'CASH' | 'SUPPLIER_PAYABLE' | 'REFUND_PAYABLE' | 'LOGISTICS_PAYABLE' | 'TAX_PAYABLE'
-  | 'PLATFORM_FEE_REVENUE' | 'PACKAGING_REVENUE' | 'LOGISTICS_REVENUE' | 'OPTIONAL_SERVICE_REVENUE' | 'PAYMENT_FEE_COLLECTED'
+  | 'PLATFORM_FEE_REVENUE' | 'PACKAGING_REVENUE' | 'LOGISTICS_REVENUE' | 'OPTIONAL_SERVICE_REVENUE' | 'PAYMENT_FEE_COLLECTED' | 'RESELLER_MARGIN_REVENUE'
   | 'PACKAGING_COST' | 'LOGISTICS_COST' | 'PAYMENT_PROCESSING_FEE' | 'PROMOTION_DISCOUNT' | 'RETURN_ADJUSTMENT' | 'LOGISTICS_RECEIVABLE';
 export type LComponent =
   | 'PRODUCT_VALUE' | 'PLATFORM_FEE_REVENUE' | 'PACKAGING_REVENUE' | 'PACKAGING_COST' | 'LOGISTICS_REVENUE' | 'LOGISTICS_PAYABLE'
   | 'PAYMENT_PROCESSING_FEE' | 'TAX_PAYABLE' | 'REFUND' | 'RETURN_ADJUSTMENT' | 'SUPPLIER_PAYABLE' | 'SUPPLIER_PAYOUT'
-  | 'PROMOTION_DISCOUNT' | 'OPTIONAL_SERVICE' | 'PAYMENT_FEE' | 'CASH_IN' | 'CASH_OUT' | 'LOGISTICS_RECOVERY';
+  | 'PROMOTION_DISCOUNT' | 'OPTIONAL_SERVICE' | 'PAYMENT_FEE' | 'CASH_IN' | 'CASH_OUT' | 'LOGISTICS_RECOVERY' | 'RESELLER_MARGIN' | 'PAYOUT_REVERSAL';
 
 export interface Entry {
   account: Account; component: LComponent; side: 'DEBIT' | 'CREDIT'; amount: number;
@@ -21,7 +21,7 @@ export interface Entry {
 
 export const ASSET_ACCOUNTS: Account[] = ['CASH', 'LOGISTICS_RECEIVABLE'];
 export const LIABILITY_ACCOUNTS: Account[] = ['SUPPLIER_PAYABLE', 'REFUND_PAYABLE', 'LOGISTICS_PAYABLE', 'TAX_PAYABLE'];
-export const REVENUE_ACCOUNTS: Account[] = ['PLATFORM_FEE_REVENUE', 'PACKAGING_REVENUE', 'LOGISTICS_REVENUE', 'OPTIONAL_SERVICE_REVENUE', 'PAYMENT_FEE_COLLECTED'];
+export const REVENUE_ACCOUNTS: Account[] = ['PLATFORM_FEE_REVENUE', 'PACKAGING_REVENUE', 'LOGISTICS_REVENUE', 'OPTIONAL_SERVICE_REVENUE', 'PAYMENT_FEE_COLLECTED', 'RESELLER_MARGIN_REVENUE'];
 export const EXPENSE_ACCOUNTS: Account[] = ['PACKAGING_COST', 'LOGISTICS_COST', 'PAYMENT_PROCESSING_FEE', 'PROMOTION_DISCOUNT', 'RETURN_ADJUSTMENT'];
 
 export async function postJournal(
@@ -57,13 +57,17 @@ export interface OrderPricingRow {
   product_value: number; platform_fee_amount: number; packaging_amount: number; logistics_amount: number;
   payment_fee_amount: number; optional_amount: number; discount_amount: number; tax_amount: number; total_amount: number;
   pricing_snapshot: any;
+  trade_model?: string; purchase_value?: number | null;
 }
 
 /** Jurnal saat pembayaran buyer diterima: kas masuk, kewajiban ke supplier, pendapatan platform, pajak terutang. */
 export async function postBuyerPayment(db: Db, o: OrderPricingRow, createdBy?: string | null) {
+  const reseller = o.trade_model === 'RESELLER' && o.purchase_value != null;
   const entries: Entry[] = [
     { account: 'CASH', component: 'CASH_IN', side: 'DEBIT', amount: o.total_amount, partyType: 'BUYER', partyId: o.buyer_id, memo: `Pembayaran ${o.order_no}` },
-    { account: 'SUPPLIER_PAYABLE', component: 'PRODUCT_VALUE', side: 'CREDIT', amount: o.product_value, partyType: 'SUPPLIER', partyId: o.supplier_id },
+    // MARKETPLACE: seluruh nilai produk = hak mitra. RESELLER: hak mitra = harga beli; selisih = margin Supplier-ID.
+    { account: 'SUPPLIER_PAYABLE', component: 'PRODUCT_VALUE', side: 'CREDIT', amount: reseller ? Number(o.purchase_value) : o.product_value, partyType: 'SUPPLIER', partyId: o.supplier_id },
+    { account: 'RESELLER_MARGIN_REVENUE', component: 'RESELLER_MARGIN', side: 'CREDIT', amount: reseller ? money(Number(o.product_value) - Number(o.purchase_value)) : 0, partyType: 'PLATFORM' },
     { account: 'PLATFORM_FEE_REVENUE', component: 'PLATFORM_FEE_REVENUE', side: 'CREDIT', amount: o.platform_fee_amount, partyType: 'PLATFORM' },
     { account: 'PACKAGING_REVENUE', component: 'PACKAGING_REVENUE', side: 'CREDIT', amount: o.packaging_amount, partyType: 'PLATFORM' },
     { account: 'LOGISTICS_REVENUE', component: 'LOGISTICS_REVENUE', side: 'CREDIT', amount: o.logistics_amount, partyType: 'PLATFORM' },

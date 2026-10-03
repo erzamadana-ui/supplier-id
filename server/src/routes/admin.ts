@@ -126,13 +126,15 @@ adminRouter.get('/audit-logs', asyncH(async (req, res) => {
   res.json(await q(pool, `SELECT a.*, u.name AS user_name FROM config_audit_logs a LEFT JOIN users u ON u.id=a.user_id WHERE ($1::text IS NULL OR a.entity=$1) ORDER BY a.created_at DESC LIMIT $2`, [entity ?? null, Number(limit ?? 200)]));
 }));
 adminRouter.put('/categories/:code', asyncH(async (req, res) => {
-  const b = parse(z.object({ name: z.string().min(2), attribute_schema: z.array(z.any()).default([]), tax_class: z.string().default('STANDARD'), min_photos: z.coerce.number().int().nullable().optional(), packaging_rate_per_unit: z.coerce.number().nullable().optional(), active: z.boolean().default(true) }), req.body);
+  const b = parse(z.object({ name: z.string().min(2), attribute_schema: z.array(z.any()).default([]), tax_class: z.string().default('STANDARD'), min_photos: z.coerce.number().int().nullable().optional(), packaging_rate_per_unit: z.coerce.number().nullable().optional(), active: z.boolean().default(true),
+    trade_model: z.enum(['MARKETPLACE', 'RESELLER']).default('MARKETPLACE'), reseller_markup_pct: z.coerce.number().min(0).max(500).default(20), storage_instructions: z.string().nullable().optional(), shelf_life_days_default: z.coerce.number().int().nullable().optional(), complaint_window_hours: z.coerce.number().int().nullable().optional(), reason: z.string().optional() }), req.body);
   const before = await maybe(pool, 'SELECT * FROM categories WHERE code=$1', [req.params.code]);
   const r = await one(pool,
-    `INSERT INTO categories(code, name, attribute_schema, tax_class, min_photos, packaging_rate_per_unit, active) VALUES ($1,$2,$3::jsonb,$4,$5,$6,$7)
-     ON CONFLICT (code) DO UPDATE SET name=EXCLUDED.name, attribute_schema=EXCLUDED.attribute_schema, tax_class=EXCLUDED.tax_class, min_photos=EXCLUDED.min_photos, packaging_rate_per_unit=EXCLUDED.packaging_rate_per_unit, active=EXCLUDED.active RETURNING *`,
-    [req.params.code.toUpperCase(), b.name, JSON.stringify(b.attribute_schema), b.tax_class, b.min_photos ?? null, b.packaging_rate_per_unit ?? null, b.active]);
-  await audit(pool, 'categories', r.code, before ? 'UPDATE' : 'CREATE', before, r, req.user!.id);
+    `INSERT INTO categories(code, name, attribute_schema, tax_class, min_photos, packaging_rate_per_unit, active, trade_model, reseller_markup_pct, storage_instructions, shelf_life_days_default, complaint_window_hours) VALUES ($1,$2,$3::jsonb,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+     ON CONFLICT (code) DO UPDATE SET name=EXCLUDED.name, attribute_schema=EXCLUDED.attribute_schema, tax_class=EXCLUDED.tax_class, min_photos=EXCLUDED.min_photos, packaging_rate_per_unit=EXCLUDED.packaging_rate_per_unit, active=EXCLUDED.active,
+       trade_model=EXCLUDED.trade_model, reseller_markup_pct=EXCLUDED.reseller_markup_pct, storage_instructions=EXCLUDED.storage_instructions, shelf_life_days_default=EXCLUDED.shelf_life_days_default, complaint_window_hours=EXCLUDED.complaint_window_hours RETURNING *`,
+    [req.params.code.toUpperCase(), b.name, JSON.stringify(b.attribute_schema), b.tax_class, b.min_photos ?? null, b.packaging_rate_per_unit ?? null, b.active, b.trade_model, b.reseller_markup_pct, b.storage_instructions ?? null, b.shelf_life_days_default ?? null, b.complaint_window_hours ?? null]);
+  await audit(pool, 'categories', r.code, before ? 'UPDATE' : 'CREATE', before, r, req.user!.id, b.reason);
   res.json(r);
 }));
 
@@ -307,7 +309,22 @@ adminRouter.post('/test-data/purge', asyncH(async (req, res) => {
          OR return_case_id IN (SELECT id FROM return_cases WHERE order_id = ANY($1))
          OR id IN (SELECT journal_id FROM payouts WHERE supplier_id = ANY($2) AND journal_id IS NOT NULL)`, [orders, orgs])).map((r) => r.id);
     // urutan sesuai ketergantungan FK (tanpa ON DELETE CASCADE)
+    await q(c, `DELETE FROM payment_task_events WHERE task_id IN (SELECT id FROM payment_tasks WHERE order_id = ANY($1))`, [orders]);
+    await q(c, `DELETE FROM payment_tasks WHERE order_id = ANY($1)`, [orders]);
     await q(c, `DELETE FROM payouts WHERE supplier_id = ANY($1)`, [orgs]);
+    await q(c, `DELETE FROM task_events WHERE task_id IN (SELECT id FROM fulfillment_tasks WHERE order_id = ANY($1))`, [orders]);
+    await q(c, `DELETE FROM escalations WHERE order_id = ANY($1) OR task_id IN (SELECT id FROM fulfillment_tasks WHERE order_id = ANY($1))`, [orders]);
+    await q(c, `DELETE FROM qc_records WHERE order_id = ANY($1)`, [orders]);
+    await q(c, `DELETE FROM package_scans WHERE package_id IN (SELECT id FROM packages WHERE order_id = ANY($1)) OR actor_id = ANY($2)`, [orders, users]);
+    await q(c, `DELETE FROM label_prints WHERE package_id IN (SELECT id FROM packages WHERE order_id = ANY($1))`, [orders]);
+    await q(c, `DELETE FROM packages WHERE order_id = ANY($1)`, [orders]);
+    await q(c, `UPDATE fulfillment_tasks SET depends_on=NULL WHERE order_id = ANY($1)`, [orders]);
+    await q(c, `DELETE FROM fulfillment_tasks WHERE order_id = ANY($1)`, [orders]);
+    await q(c, `DELETE FROM ticket_messages WHERE ticket_id IN (SELECT id FROM tickets WHERE order_id = ANY($1) OR buyer_id = ANY($2) OR supplier_id = ANY($2))`, [orders, orgs]);
+    await q(c, `DELETE FROM tickets WHERE order_id = ANY($1) OR buyer_id = ANY($2) OR supplier_id = ANY($2)`, [orders, orgs]);
+    await q(c, `DELETE FROM notifications WHERE org_id = ANY($1) OR user_id = ANY($2)`, [orgs, users]);
+    await q(c, `DELETE FROM push_tokens WHERE user_id = ANY($1)`, [users]);
+    await q(c, `DELETE FROM cart_items WHERE buyer_id = ANY($1)`, [orgs]);
     await q(c, `DELETE FROM ledger_entries WHERE journal_id = ANY($1) OR order_id = ANY($2)`, [journals, orders]);
     await q(c, `DELETE FROM ledger_journals WHERE id = ANY($1)`, [journals]);
     await q(c, `DELETE FROM financial_adjustments WHERE order_id = ANY($1)`, [orders]);
@@ -317,9 +334,11 @@ adminRouter.post('/test-data/purge', asyncH(async (req, res) => {
     await q(c, `DELETE FROM inspections WHERE order_id = ANY($1)`, [orders]);
     await q(c, `DELETE FROM shipment_events WHERE shipment_id IN (SELECT id FROM shipments WHERE order_id = ANY($1))`, [orders]);
     await q(c, `DELETE FROM shipments WHERE order_id = ANY($1)`, [orders]);
-    await q(c, `DELETE FROM payments WHERE order_id = ANY($1)`, [orders]);
+    await q(c, `DELETE FROM payments WHERE order_id = ANY($1) OR order_group_id IN (SELECT id FROM order_groups WHERE buyer_id = ANY($2))`, [orders, orgs]);
     await q(c, `DELETE FROM order_events WHERE order_id = ANY($1)`, [orders]);
     await q(c, `DELETE FROM orders WHERE id = ANY($1)`, [orders]);
+    await q(c, `DELETE FROM order_groups WHERE buyer_id = ANY($1)`, [orgs]);
+    await q(c, `DELETE FROM buyer_addresses WHERE buyer_id = ANY($1)`, [orgs]);
     await q(c, `DELETE FROM quotations WHERE supplier_id = ANY($1) OR rfq_id IN (SELECT id FROM rfqs WHERE buyer_id = ANY($1))`, [orgs]);
     await q(c, `DELETE FROM rfqs WHERE buyer_id = ANY($1)`, [orgs]);
     await q(c, `DELETE FROM declaration_acceptances WHERE supplier_id = ANY($1)`, [orgs]);
@@ -333,6 +352,8 @@ adminRouter.post('/test-data/purge', asyncH(async (req, res) => {
     await q(c, `UPDATE fee_configs SET approved_by=NULL WHERE approved_by = ANY($1)`, [users]);
     await q(c, `UPDATE tax_rules SET created_by=NULL WHERE created_by = ANY($1)`, [users]);
     await q(c, `UPDATE settings SET updated_by=NULL WHERE updated_by = ANY($1)`, [users]);
+    await q(c, `UPDATE organizations SET bank_verified_by=NULL WHERE bank_verified_by = ANY($1)`, [users]);
+    await q(c, `UPDATE shipments SET courier_user_id=NULL WHERE courier_user_id = ANY($1)`, [users]);
     await q(c, `UPDATE ledger_journals SET created_by=NULL WHERE created_by = ANY($1)`, [users]);
     await q(c, `DELETE FROM users WHERE id = ANY($1)`, [users]);
     await q(c, `DELETE FROM organizations WHERE id = ANY($1)`, [orgs]);

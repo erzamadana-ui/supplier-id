@@ -7,6 +7,8 @@ import { priceOrder, transition, weightOf } from '../services/orders';
 import { postBuyerPayment, postProviderFee, postPackagingCost, postLogisticsCost, postJournal, reconcile } from '../services/ledger';
 import { recomputeQualityScore } from '../services/quality';
 import { runEligibilityCheck } from '../services/returns';
+import { createAcceptanceTask } from '../services/fulfillment';
+import { ensurePaymentTask } from '../services/settlement';
 
 export const ordersRouter = Router();
 
@@ -14,8 +16,9 @@ async function loadCtx(db: Db, batchId: string, buyerId: string) {
   const batch = await one(db, 'SELECT * FROM batches WHERE id=$1', [batchId]);
   const supplierOrg = await one(db, 'SELECT * FROM organizations WHERE id=$1', [batch.supplier_id]);
   const buyerOrg = await one(db, 'SELECT * FROM organizations WHERE id=$1', [buyerId]);
-  const category = await one(db, 'SELECT c.id, c.tax_class FROM categories c JOIN products p ON p.category_id=c.id WHERE p.id=$1', [batch.product_id]);
-  return { batch, supplierOrg, buyerOrg, category };
+  const category = await one(db, 'SELECT c.id, c.tax_class, c.trade_model, c.reseller_markup_pct FROM categories c JOIN products p ON p.category_id=c.id WHERE p.id=$1', [batch.product_id]);
+  const platformTaxStatus = (await getSetting(db, 'trade.platform_tax_status', 'NON_PKP')) === 'PKP' ? 'PKP' as const : 'NON_PKP' as const;
+  return { batch, supplierOrg, buyerOrg, category, platformTaxStatus };
 }
 
 export async function createDraftOrder(db: Db, a: {
@@ -26,18 +29,20 @@ export async function createDraftOrder(db: Db, a: {
   if (ctx.batch.status !== 'READY_FOR_ORDER') throw conflict('BATCH_NOT_READY_FOR_ORDER', { status: ctx.batch.status });
   if (a.quantity > Number(ctx.batch.available_quantity)) throw conflict('INSUFFICIENT_QUANTITY', { available: ctx.batch.available_quantity });
   if (['SUSPENDED', 'UNDER_REVIEW'].includes(ctx.supplierOrg.status)) throw conflict('SUPPLIER_RESTRICTED');
+  if (a.quantity < Number(ctx.batch.min_order_qty ?? 1)) throw bad('BELOW_MIN_ORDER', { min_order_qty: ctx.batch.min_order_qty });
   const unitPrice = a.unitPrice ?? Number(ctx.batch.price_per_unit);
   const pr = await priceOrder(db, { ...ctx, quantity: a.quantity, unitPrice, distanceKm: a.distanceKm, optionalServiceCodes: a.optionalServiceCodes, promoCode: a.promoCode });
+  const sellUnitPrice = pr.tradeModel === 'RESELLER' ? money(pr.productValue / a.quantity) : unitPrice;
   const orderNo = await nextNo(db, 'order', 'SO');
   return one(db,
     `INSERT INTO orders(order_no, buyer_id, supplier_id, product_id, batch_id, rfq_id, quotation_id, status, quantity, unit, unit_price, weight_kg, distance_km,
        delivery_address, optional_services, promo_code, product_value, platform_fee_rate, platform_fee_amount, packaging_amount, logistics_amount, payment_fee_amount,
-       optional_amount, discount_amount, tax_amount, total_amount, pricing_snapshot)
-     VALUES ($1,$2,$3,$4,$5,$6,$7,'DRAFT',$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26::jsonb) RETURNING *`,
-    [orderNo, a.buyerId, ctx.batch.supplier_id, ctx.batch.product_id, ctx.batch.id, a.rfqId ?? null, a.quotationId ?? null, a.quantity, ctx.batch.unit, unitPrice,
+       optional_amount, discount_amount, tax_amount, total_amount, pricing_snapshot, trade_model, purchase_unit_price, purchase_value)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,'DRAFT',$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26::jsonb,$27,$28,$29) RETURNING *`,
+    [orderNo, a.buyerId, ctx.batch.supplier_id, ctx.batch.product_id, ctx.batch.id, a.rfqId ?? null, a.quotationId ?? null, a.quantity, ctx.batch.unit, sellUnitPrice,
       weightOf(ctx.batch, a.quantity), a.distanceKm, a.deliveryAddress ?? null, JSON.stringify(pr.optionalLines), a.promoCode,
       pr.productValue, pr.platformFeeRate, pr.platformFeeAmount, pr.packagingAmount, pr.logisticsAmount, pr.paymentFeeAmount, pr.optionalAmount,
-      pr.discountAmount, pr.taxAmount, pr.totalAmount, JSON.stringify({ ...pr, preview: true })]);
+      pr.discountAmount, pr.taxAmount, pr.totalAmount, JSON.stringify({ ...pr, preview: true }), pr.tradeModel, pr.purchaseUnitPrice, pr.purchaseValue]);
 }
 
 const previewSchema = z.object({
@@ -97,25 +102,29 @@ ordersRouter.get('/orders/:id', requireRole(), asyncH(async (req, res) => {
 }));
 
 /** KONFIRMASI: kunci PRICING SNAPSHOT (rate & nominal saat ini). Perubahan fee di kemudian hari tidak mengubah order ini. */
+/** Kunci harga + reservasi stok atomik (FOR UPDATE) + tenggat bayar. Dipakai /confirm dan /checkout. */
+export async function confirmOrder(c: Db, o: any, userId: string) {
+  const ctx = await loadCtx(c, o.batch_id, o.buyer_id);
+  const b = await one(c, 'SELECT * FROM batches WHERE id=$1 FOR UPDATE', [o.batch_id]);
+  if (b.status !== 'READY_FOR_ORDER' || Number(b.available_quantity) < Number(o.quantity)) throw conflict('INSUFFICIENT_QUANTITY', { batch: b.batch_code, available: b.available_quantity });
+  const now = new Date();
+  const pr = await priceOrder(c, { ...ctx, quantity: Number(o.quantity), unitPrice: Number(o.unit_price), distanceKm: Number(o.distance_km), optionalServiceCodes: (o.optional_services as any[]).map((x) => x.code), promoCode: o.promo_code, at: now });
+  await q(c, 'UPDATE batches SET available_quantity=available_quantity-$2, status=CASE WHEN available_quantity-$2<=0 THEN \'SOLD_OUT\' ELSE status END WHERE id=$1', [b.id, o.quantity]);
+  const lead = Number(await getSetting(c, 'fulfillment.pickup_lead_hours', 48));
+  const expiry = Number(await getSetting(c, 'payment.expiry_hours', 2));
+  return transition(c, o.id, 'PENDING_PAYMENT', userId, 'Order dikonfirmasi; pricing snapshot terkunci',
+    `, pricing_locked_at=now(), confirmed_at=now(), fee_config_id='${pr.feeConfig.id}', platform_fee_rate=${pr.platformFeeRate}, product_value=${pr.productValue},
+      platform_fee_amount=${pr.platformFeeAmount}, packaging_amount=${pr.packagingAmount}, logistics_amount=${pr.logisticsAmount}, payment_fee_amount=${pr.paymentFeeAmount},
+      optional_amount=${pr.optionalAmount}, discount_amount=${pr.discountAmount}, tax_amount=${pr.taxAmount}, total_amount=${pr.totalAmount},
+      trade_model='${pr.tradeModel}', purchase_unit_price=${pr.purchaseUnitPrice ?? 'NULL'}, purchase_value=${pr.purchaseValue ?? 'NULL'},
+      promised_pickup_at=now() + interval '${lead} hours', payment_due_at=now() + interval '${expiry} hours',
+      pricing_snapshot='${JSON.stringify({ ...pr, locked_at: now.toISOString(), fee_config: pr.feeConfig }).replace(/'/g, "''")}'::jsonb`);
+}
+
 ordersRouter.post('/orders/:id/confirm', requireRole('BUYER'), asyncH(async (req, res) => {
   const o = await one(pool, 'SELECT * FROM orders WHERE id=$1', [req.params.id]);
   if (o.buyer_id !== req.user!.orgId) throw forbidden();
-  const row = await tx(async (c) => {
-    const ctx = await loadCtx(c, o.batch_id, o.buyer_id);
-    const b = await one(c, 'SELECT * FROM batches WHERE id=$1 FOR UPDATE', [o.batch_id]);
-    if (b.status !== 'READY_FOR_ORDER' || Number(b.available_quantity) < Number(o.quantity)) throw conflict('INSUFFICIENT_QUANTITY');
-    const now = new Date();
-    const pr = await priceOrder(c, { ...ctx, quantity: Number(o.quantity), unitPrice: Number(o.unit_price), distanceKm: Number(o.distance_km), optionalServiceCodes: (o.optional_services as any[]).map((x) => x.code), promoCode: o.promo_code, at: now });
-    await q(c, 'UPDATE batches SET available_quantity=available_quantity-$2, status=CASE WHEN available_quantity-$2<=0 THEN \'SOLD_OUT\' ELSE status END WHERE id=$1', [b.id, o.quantity]);
-    const lead = Number(await getSetting(c, 'fulfillment.pickup_lead_hours', 48));
-    return transition(c, o.id, 'PENDING_PAYMENT', req.user!.id, 'Order dikonfirmasi; pricing snapshot terkunci',
-      `, pricing_locked_at=now(), confirmed_at=now(), fee_config_id='${pr.feeConfig.id}', platform_fee_rate=${pr.platformFeeRate}, product_value=${pr.productValue},
-        platform_fee_amount=${pr.platformFeeAmount}, packaging_amount=${pr.packagingAmount}, logistics_amount=${pr.logisticsAmount}, payment_fee_amount=${pr.paymentFeeAmount},
-        optional_amount=${pr.optionalAmount}, discount_amount=${pr.discountAmount}, tax_amount=${pr.taxAmount}, total_amount=${pr.totalAmount},
-        promised_pickup_at=now() + interval '${lead} hours',
-        pricing_snapshot='${JSON.stringify({ ...pr, locked_at: now.toISOString(), fee_config: pr.feeConfig }).replace(/'/g, "''")}'::jsonb`);
-  });
-  res.json(row);
+  res.json(await tx((c) => confirmOrder(c, o, req.user!.id)));
 }));
 
 /** PEMBAYARAN (mock gateway): kas masuk → ledger BUYER_PAYMENT + PROVIDER_FEE. */
@@ -126,11 +135,12 @@ ordersRouter.post('/orders/:id/pay', requireRole('BUYER', 'ADMIN'), asyncH(async
   const row = await tx(async (c) => {
     const providerFee = money(Number(o.pricing_snapshot?.costBasis?.providerFee ?? 0));
     const pay = await one(c,
-      `INSERT INTO payments(order_id, provider, channel, amount, provider_fee, status, provider_ref, paid_at) VALUES ($1,'MOCK_GATEWAY',$2,$3,$4,'PAID',$5,now()) RETURNING *`,
-      [o.id, channel, o.total_amount, providerFee, `MOCK-${Date.now()}`]);
-    const upd = await transition(c, o.id, 'PAID', req.user!.id, `Pembayaran ${pay.provider_ref} via ${channel}`, ', paid_at=now()');
+      `INSERT INTO payments(order_id, order_group_id, provider, channel, amount, provider_fee, status, provider_ref, paid_at, is_sandbox) VALUES ($1,$2,'MOCK_GATEWAY',$3,$4,$5,'PAID',$6,now(),TRUE) RETURNING *`,
+      [o.id, o.order_group_id ?? null, channel, o.total_amount, providerFee, `MOCK-${Date.now()}`]);
+    const upd = await transition(c, o.id, 'PAID', req.user!.id, `Pembayaran ${pay.provider_ref} via ${channel} (SANDBOX)`, ', paid_at=now()');
     await postBuyerPayment(c, upd, req.user!.id);
     await postProviderFee(c, upd, providerFee);
+    await createAcceptanceTask(c, upd);
     return { order: upd, payment: pay };
   });
   res.json(row);
@@ -243,10 +253,13 @@ ordersRouter.post('/orders/:id/inspection', requireRole('BUYER'), asyncH(async (
         [await nextNo(c, 'return', 'RET'), o.id, insp.id, ship.id, o.batch_id, o.buyer_id, o.supplier_id, b.reason_code, b.description ?? null, rejected]);
       await q(c, `UPDATE evidence_files SET return_case_id=$2 WHERE order_id=$1 AND owner_type='INSPECTION'`, [o.id, returnCase.id]);
       returnCase = await runEligibilityCheck(c, returnCase.id);
+      await q(c, `UPDATE orders SET confirmed_by='BUYER', confirmation_at=now() WHERE id=$1`, [o.id]);
     } else {
-      // Full acceptance → langsung SETTLED (hak supplier final; payout menyusul)
-      order = await transition(c, o.id, 'SETTLED', req.user!.id, 'Diterima penuh; siap payout', ', settled_at=now()');
+      // Full acceptance → langsung SETTLED (hak supplier final) → payment task (tepat satu per suborder)
+      order = await transition(c, o.id, 'SETTLED', req.user!.id, 'Diterima penuh; siap payout', ', settled_at=now(), confirmed_by=\'BUYER\', confirmation_at=now()');
+      await ensurePaymentTask(c, o.id, 'BUYER_CONFIRM', req.user!.id);
     }
+    await q(c, `UPDATE packages SET status='RECEIVED' WHERE shipment_id=$1 AND status='DELIVERED'`, [ship.id]);
     return { order, inspection: insp, return_case: returnCase };
   });
   await recomputeQualityScore(pool, o.supplier_id);
@@ -262,15 +275,20 @@ ordersRouter.post('/orders/:id/cancel', requireRole('BUYER', 'SUPPLIER', 'ADMIN'
   const { reason } = parse(z.object({ reason: z.string().default('') }), req.body ?? {});
   const row = await tx(async (c) => {
     const upd = await transition(c, o.id, 'CANCELLED', u.id, `Dibatalkan oleh ${u.role}: ${reason}`, ', cancelled_at=now()');
-    if (['PENDING_PAYMENT', 'PAID', 'PACKING'].includes(o.status)) {
+    if (['PENDING_PAYMENT', 'PAID', 'PROCESSING', 'PACKING', 'READY_FOR_PICKUP', 'DELIVERY_FAILED'].includes(o.status)) {
       await q(c, `UPDATE batches SET available_quantity=available_quantity+$2, status=CASE WHEN status='SOLD_OUT' THEN 'READY_FOR_ORDER' ELSE status END WHERE id=$1`, [o.batch_id, o.quantity]);
+      await q(c, `UPDATE fulfillment_tasks SET status='CANCELLED', updated_at=now() WHERE order_id=$1 AND status NOT IN ('DONE','REJECTED','CANCELLED')`, [o.id]);
+      await q(c, `UPDATE packages SET status='CANCELLED', cancelled_at=now(), cancel_reason='Order dibatalkan' WHERE order_id=$1 AND status IN ('PACKED','HANDED_OVER')`, [o.id]);
+      await q(c, `UPDATE escalations SET status='RESOLVED', resolution='Order dibatalkan', resolved_at=now() WHERE order_id=$1 AND status='OPEN'`, [o.id]);
     }
-    if (['PAID', 'PACKING'].includes(o.status)) {
+    if (['PAID', 'PROCESSING', 'PACKING', 'READY_FOR_PICKUP', 'DELIVERY_FAILED'].includes(o.status)) {
       const feeRefundable = await getSetting(c, 'payment.fee_refundable', false);
       const pfTax = Number((o.pricing_snapshot?.taxLines ?? []).find((t: any) => t.component === 'PAYMENT_FEE')?.amount ?? 0);
       const refund = money(Number(o.total_amount) - (feeRefundable ? 0 : Number(o.payment_fee_amount) + pfTax));
+      const reseller = o.trade_model === 'RESELLER' && o.purchase_value != null;
       const entries: any[] = [
-        { account: 'SUPPLIER_PAYABLE', component: 'RETURN_ADJUSTMENT', side: 'DEBIT', amount: Number(o.product_value), partyType: 'SUPPLIER', partyId: o.supplier_id },
+        { account: 'SUPPLIER_PAYABLE', component: 'RETURN_ADJUSTMENT', side: 'DEBIT', amount: reseller ? Number(o.purchase_value) : Number(o.product_value), partyType: 'SUPPLIER', partyId: o.supplier_id },
+        { account: 'RESELLER_MARGIN_REVENUE', component: 'RESELLER_MARGIN', side: 'DEBIT', amount: reseller ? money(Number(o.product_value) - Number(o.purchase_value)) : 0, partyType: 'PLATFORM' },
         { account: 'PLATFORM_FEE_REVENUE', component: 'PLATFORM_FEE_REVENUE', side: 'DEBIT', amount: Number(o.platform_fee_amount), partyType: 'PLATFORM' },
         { account: 'PACKAGING_REVENUE', component: 'PACKAGING_REVENUE', side: 'DEBIT', amount: Number(o.packaging_amount), partyType: 'PLATFORM' },
         { account: 'LOGISTICS_REVENUE', component: 'LOGISTICS_REVENUE', side: 'DEBIT', amount: Number(o.logistics_amount), partyType: 'PLATFORM' },

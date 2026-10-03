@@ -15,12 +15,46 @@ export const forbidden = (msg = 'FORBIDDEN') => new HttpError(403, msg);
 export const notFound = (msg = 'NOT_FOUND') => new HttpError(404, msg);
 export const conflict = (msg: string, details?: any) => new HttpError(409, msg, details);
 
+export type Role = 'ADMIN' | 'SUPPLIER' | 'BUYER' | 'COURIER';
 export interface AuthUser {
   id: string;
   email: string;
   name: string;
-  role: 'ADMIN' | 'SUPPLIER' | 'BUYER';
+  role: Role;
   orgId: string | null;
+  adminRole?: string | null;     // OWNER | OPS | QC | WAREHOUSE | DISPATCHER | CS | FINANCE_MAKER | FINANCE_CHECKER | AUDITOR
+  permissions?: string[];        // izin efektif (preset admin_role + tambahan)
+}
+
+/** Preset izin per peran admin. Peran boleh digabung secara bisnis, izin tetap terpisah (maker ≠ checker). */
+export const ADMIN_ROLE_PERMS: Record<string, string[]> = {
+  OWNER: ['*'],
+  OPS: ['orders.read', 'orders.manage', 'tasks.read', 'tasks.manage', 'escalations.manage', 'partners.read', 'partners.manage', 'catalog.manage', 'settings.read', 'reports.read', 'tickets.read'],
+  QC: ['orders.read', 'tasks.read', 'qc.manage', 'partners.read'],
+  WAREHOUSE: ['orders.read', 'tasks.read', 'packing.manage', 'labels.print', 'scan'],
+  DISPATCHER: ['orders.read', 'shipments.manage', 'scan', 'couriers.manage'],
+  CS: ['orders.read', 'tickets.read', 'tickets.manage', 'returns.read', 'returns.decide', 'refunds.request', 'partners.read'],
+  FINANCE_MAKER: ['orders.read', 'finance.read', 'payouts.make', 'payouts.process', 'ledger.read', 'reports.read'],
+  FINANCE_CHECKER: ['orders.read', 'finance.read', 'payouts.check', 'ledger.read', 'reports.read', 'fees.approve'],
+  AUDITOR: ['orders.read', 'finance.read', 'ledger.read', 'reports.read', 'audit.read', 'tickets.read', 'returns.read', 'tasks.read', 'partners.read', 'settings.read'],
+};
+
+export function effectivePermissions(role: Role, adminRole?: string | null, extra: string[] = []): string[] {
+  if (role !== 'ADMIN') return extra;
+  const preset = ADMIN_ROLE_PERMS[adminRole ?? 'OWNER'] ?? ADMIN_ROLE_PERMS.OWNER; // admin lama tanpa admin_role = OWNER
+  return Array.from(new Set([...preset, ...extra]));
+}
+
+export const hasPerm = (u: AuthUser | undefined, perm: string) => !!u && u.role === 'ADMIN' && ((u.permissions ?? []).includes('*') || (u.permissions ?? []).includes(perm));
+
+/** Izin granular admin (server-side). OWNER selalu lolos. */
+export function requirePerm(...perms: string[]) {
+  return (req: Request, _res: Response, next: NextFunction) => {
+    if (!req.user) return next(new HttpError(401, 'UNAUTHENTICATED'));
+    if (req.user.role !== 'ADMIN') return next(forbidden());
+    if (!perms.some((p) => hasPerm(req.user, p))) return next(new HttpError(403, 'PERMISSION_REQUIRED', { required: perms, admin_role: req.user.adminRole }));
+    next();
+  };
 }
 declare global {
   namespace Express {
@@ -43,8 +77,10 @@ export async function authenticate(req: Request, _res: Response, next: NextFunct
   if (h?.startsWith('Bearer ')) {
     try {
       const t = jwt.verify(h.slice(7), JWT_SECRET) as AuthUser & { tv?: number };
-      const row = await maybe<{ role: AuthUser['role']; org_id: string | null; token_version: number }>(pool, 'SELECT role, org_id, token_version FROM users WHERE id=$1', [t.id]);
-      if (row && (t.tv ?? 0) === row.token_version) req.user = { id: t.id, email: t.email, name: t.name, role: row.role, orgId: row.org_id };
+      const row = await maybe<{ role: AuthUser['role']; org_id: string | null; token_version: number; admin_role: string | null; permissions: string[]; active: boolean }>(pool, 'SELECT role, org_id, token_version, admin_role, permissions, active FROM users WHERE id=$1', [t.id]);
+      if (row && row.active !== false && (t.tv ?? 0) === row.token_version) {
+        req.user = { id: t.id, email: t.email, name: t.name, role: row.role, orgId: row.org_id, adminRole: row.admin_role, permissions: effectivePermissions(row.role, row.admin_role, row.permissions ?? []) };
+      }
     } catch {
       /* token tidak valid → anonim */
     }

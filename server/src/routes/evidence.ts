@@ -27,8 +27,8 @@ const upload = multer({
 export const evidenceRouter = Router();
 
 const metaSchema = z.object({
-  owner_type: z.enum(['BATCH', 'HARVEST_CURRENT', 'HARVEST_PRE', 'HARVEST_FINAL', 'INSPECTION', 'RETURN', 'SHIPMENT']),
-  kind: z.enum(['OVERALL', 'CLOSEUP', 'PACKAGING', 'CURRENT', 'PRE_HARVEST', 'FINAL', 'RECEIVING_PHOTO', 'RECEIVING_VIDEO', 'RETURN_PHOTO', 'RETURN_VIDEO', 'PICKUP', 'OTHER']),
+  owner_type: z.enum(['BATCH', 'HARVEST_CURRENT', 'HARVEST_PRE', 'HARVEST_FINAL', 'INSPECTION', 'RETURN', 'SHIPMENT', 'QC', 'PACKAGE', 'DELIVERY', 'TICKET']),
+  kind: z.enum(['OVERALL', 'CLOSEUP', 'PACKAGING', 'CURRENT', 'PRE_HARVEST', 'FINAL', 'RECEIVING_PHOTO', 'RECEIVING_VIDEO', 'RETURN_PHOTO', 'RETURN_VIDEO', 'PICKUP', 'OTHER', 'QC_PHOTO', 'PACKING_PHOTO', 'DELIVERY_PROOF', 'HANDOVER_PHOTO', 'TICKET_ATTACHMENT']),
   batch_id: z.string().uuid().optional(),
   order_id: z.string().uuid().optional(),
   shipment_id: z.string().uuid().optional(),
@@ -45,7 +45,7 @@ const metaSchema = z.object({
  * Unggah bukti (foto/video). multipart/form-data: file + metadata.
  * Foto deklarasi WAJIB dari barang aktual; stock image ditolak (is_stock_image=true → 400).
  */
-evidenceRouter.post('/', requireRole('SUPPLIER', 'BUYER', 'ADMIN'), upload.single('file'), asyncH(async (req, res) => {
+evidenceRouter.post('/', requireRole('SUPPLIER', 'BUYER', 'ADMIN', 'COURIER'), upload.single('file'), asyncH(async (req, res) => {
   if (!req.file) throw bad('FILE_REQUIRED');
   const m = parse(metaSchema, req.body);
   if (m.is_stock_image) { fs.unlinkSync(req.file.path); throw bad('STOCK_IMAGE_NOT_ALLOWED', 'Foto deklarasi kualitas harus foto aktual barang/batch yang dijual'); }
@@ -69,6 +69,12 @@ evidenceRouter.post('/', requireRole('SUPPLIER', 'BUYER', 'ADMIN'), upload.singl
     buyerId = o.buyer_id; supplierId = o.supplier_id; productId = o.product_id;
     m.batch_id = m.batch_id ?? o.batch_id;
   }
+  if (m.shipment_id) {
+    const s = await one(pool, 'SELECT * FROM shipments WHERE id=$1', [m.shipment_id]);
+    if (u.role === 'COURIER' && s.courier_user_id !== u.id) throw forbidden();
+    m.order_id = m.order_id ?? s.order_id;
+  }
+  if (u.role === 'COURIER' && !m.shipment_id) throw forbidden();
   const sha = crypto.createHash('sha256').update(fs.readFileSync(req.file.path)).digest('hex');
   const consent = !!m.location_consent;
   const storedPath = await storeEvidence(req.file.path, req.file.mimetype);
@@ -88,14 +94,14 @@ evidenceRouter.post('/', requireRole('SUPPLIER', 'BUYER', 'ADMIN'), upload.singl
 evidenceRouter.get('/mode', (_req, res) => res.json({ mode: storageMode === 'supabase' ? 'direct' : 'multipart', max_multipart_mb: 200 }));
 
 /** Langkah 1 unggah langsung: minta signed upload URL. */
-evidenceRouter.post('/sign', requireRole('SUPPLIER', 'BUYER', 'ADMIN'), asyncH(async (req, res) => {
+evidenceRouter.post('/sign', requireRole('SUPPLIER', 'BUYER', 'ADMIN', 'COURIER'), asyncH(async (req, res) => {
   const { filename, media_type } = parse(z.object({ filename: z.string().min(1), media_type: z.string().regex(/^(image|video)\//) }), req.body);
   const ext = path.extname(filename || '').toLowerCase().slice(0, 8) || (media_type.startsWith('video/') ? '.mp4' : '.jpg');
   res.json(await createSignedUpload(ext));
 }));
 
 /** Langkah 2 unggah langsung: catat metadata bukti setelah objek ada di Storage. */
-evidenceRouter.post('/complete', requireRole('SUPPLIER', 'BUYER', 'ADMIN'), asyncH(async (req, res) => {
+evidenceRouter.post('/complete', requireRole('SUPPLIER', 'BUYER', 'ADMIN', 'COURIER'), asyncH(async (req, res) => {
   const m = parse(metaSchema.extend({ key: z.string().min(3), media_type: z.string().regex(/^(image|video)\//), sha256: z.string().optional() }), req.body);
   if (m.is_stock_image) throw bad('STOCK_IMAGE_NOT_ALLOWED', 'Foto deklarasi kualitas harus foto aktual barang/batch yang dijual');
   const isVideo = m.media_type.startsWith('video/');
@@ -119,6 +125,12 @@ evidenceRouter.post('/complete', requireRole('SUPPLIER', 'BUYER', 'ADMIN'), asyn
     buyerId = o.buyer_id; supplierId = o.supplier_id; productId = o.product_id;
     m.batch_id = m.batch_id ?? o.batch_id;
   }
+  if (m.shipment_id) {
+    const s = await one(pool, 'SELECT * FROM shipments WHERE id=$1', [m.shipment_id]);
+    if (u.role === 'COURIER' && s.courier_user_id !== u.id) throw forbidden();
+    m.order_id = m.order_id ?? s.order_id;
+  }
+  if (u.role === 'COURIER' && !m.shipment_id) throw forbidden();
   const consent = !!m.location_consent;
   const row = await one(
     pool,

@@ -1,3 +1,4 @@
+import { ensurePaymentTask } from '../services/settlement';
 import { Router } from 'express';
 import { z } from 'zod';
 import { pool, q, one, maybe, tx } from '../db';
@@ -88,6 +89,7 @@ returnsRouter.post('/returns/:id/decide', requireRole('ADMIN'), asyncH(async (re
     if (b.decision === 'REJECTED') {
       // klaim ditolak → tidak ada refund; order selesai, supplier berhak penuh
       await transition(c, o.id, 'SETTLED', req.user!.id, 'Klaim retur ditolak; hak supplier penuh', ', settled_at=now()');
+      await ensurePaymentTask(c, o.id, 'DISPUTE_RESOLVED', req.user!.id);
       await q(c, `UPDATE return_cases SET closed_at=now(), status='CLOSED' WHERE id=$1`, [rc.id]);
     } else {
       adjustment = await applyReturnAdjustment(c, o.id, rc.id, approvedQty, b.fault_attribution as Fault, req.user!.id);
@@ -129,6 +131,7 @@ returnsRouter.post('/returns/:id/receive', requireRole('SUPPLIER', 'ADMIN'), asy
     const upd = await one(c, `UPDATE return_cases SET status='CLOSED', received_at=now(), closed_at=now() WHERE id=$1 RETURNING *`, [rc.id]);
     const o = await one(c, 'SELECT status FROM orders WHERE id=$1', [rc.order_id]);
     if (o.status !== 'SETTLED') await transition(c, rc.order_id, 'SETTLED', req.user!.id, 'Retur selesai; order disettle', ', settled_at=now()');
+    await ensurePaymentTask(c, rc.order_id, 'DISPUTE_RESOLVED', req.user!.id);
     return upd;
   });
   res.json(row);

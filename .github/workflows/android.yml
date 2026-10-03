@@ -15,6 +15,11 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 17 }
       - uses: android-actions/setup-android@v3
+        with:
+          # paket default action memuat 'tools' (sudah dihapus Google) → sdkmanager exit 1; sebutkan paket eksplisit
+          packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
+          accept-android-sdk-licenses: true
+          log-accepted-android-sdk-licenses: false
       - name: Build web assets untuk APK (base '/', API absolut)
         working-directory: web
         run: |

@@ -89,8 +89,20 @@ supplierRouter.get('/batches/:id', asyncH(async (req, res) => {
   res.json({ ...b, photos, harvest, acceptance, readiness: await readiness(b) });
 }));
 
+
+/** Kolom batch yang sering sama dengan kunci atribut kategori; atribut yang kosong diisi otomatis dari kolom agar supplier tidak mengisi dua kali. */
+const MIRROR_COLUMNS = ['grade', 'condition', 'size', 'color', 'freshness', 'moisture', 'temperature_c', 'harvest_date', 'availability_date', 'expiry_date', 'shelf_life_days', 'expected_weight_kg'];
+export function mergeMirroredAttributes(fields: Record<string, any>, attributes: Record<string, any> | null | undefined): Record<string, any> {
+  const out: Record<string, any> = { ...(attributes ?? {}) };
+  for (const k of MIRROR_COLUMNS) {
+    if ((out[k] === undefined || out[k] === '') && fields[k] !== undefined && fields[k] !== null && fields[k] !== '') out[k] = fields[k];
+  }
+  return out;
+}
+
 supplierRouter.post('/batches', asyncH(async (req, res) => {
   const b = parse(batchSchema, req.body);
+  b.attributes = mergeMirroredAttributes(b, b.attributes);
   const p = await one(pool, 'SELECT * FROM products WHERE id=$1', [b.product_id]);
   if (p.supplier_id !== orgOf(req)) throw forbidden();
   if (b.type === 'HARVEST' && !b.harvest) throw bad('HARVEST_DETAILS_REQUIRED');
@@ -119,6 +131,7 @@ supplierRouter.patch('/batches/:id', asyncH(async (req, res) => {
   const cur = await one(pool, 'SELECT * FROM batches WHERE id=$1', [req.params.id]);
   if (cur.supplier_id !== orgOf(req)) throw forbidden();
   const b = parse(batchSchema.partial().omit({ product_id: true, type: true }), req.body);
+  if (b.attributes !== undefined || MIRROR_COLUMNS.some((k) => (b as any)[k] !== undefined)) b.attributes = mergeMirroredAttributes({ ...cur, ...b }, b.attributes ?? cur.attributes);
   const cols: string[] = []; const vals: any[] = [cur.id];
   for (const [k, v] of Object.entries(b)) {
     if (k === 'harvest' || v === undefined) continue;
@@ -145,7 +158,8 @@ async function readiness(b: any) {
   if (!isHarvest && !b.harvest_date && !b.availability_date) missing.push('harvest_date|availability_date');
   if (!(Number(b.price_per_unit) > 0)) missing.push('price_per_unit');
   for (const f of cat.attribute_schema as any[]) {
-    if (f.required && !isHarvest && (b.attributes?.[f.key] === undefined || b.attributes?.[f.key] === '')) missing.push(`attributes.${f.key}`);
+    const av = b.attributes?.[f.key] ?? (MIRROR_COLUMNS.includes(f.key) ? b[f.key] : undefined);
+    if (f.required && !isHarvest && (av === undefined || av === null || av === '')) missing.push(`attributes.${f.key}`);
   }
   const kinds = new Set(photos.map((p) => p.kind));
   const missingKinds = isHarvest ? (kinds.has('CURRENT') || kinds.has('OVERALL') ? [] : ['CURRENT']) : requiredKinds.filter((k) => !kinds.has(k));
@@ -214,6 +228,10 @@ supplierRouter.post('/batches/:id/harvest/finalize', asyncH(async (req, res) => 
   const minPhotos = Number(await getSetting(pool, 'evidence.min_photos', 3));
   if (finals.n < minPhotos) throw bad('FINAL_PHOTOS_REQUIRED', { required: minPhotos, uploaded: finals.n });
   const ver = await one(pool, 'SELECT * FROM declaration_versions WHERE version=$1 AND active', [d.declaration_version]);
+  // atribut kategori yang cermin kolom batch diisi dari data final (grade/kondisi/tanggal panen/berat)
+  const mergedAttrs = mergeMirroredAttributes(
+    { ...b, grade: d.actual_grade, condition: d.actual_condition, harvest_date: d.actual_harvest_date, expected_weight_kg: d.actual_weight_kg ?? b.expected_weight_kg },
+    { ...(b.attributes ?? {}), ...(d.attributes ?? {}) });
   const result = await tx(async (c) => {
     await q(c,
       `UPDATE harvests SET stage='FINAL', actual_quantity=$2, actual_grade=$3, actual_weight_kg=$4, actual_condition=$5, actual_harvest_date=$6, finalized_at=now() WHERE batch_id=$1`,
@@ -221,7 +239,7 @@ supplierRouter.post('/batches/:id/harvest/finalize', asyncH(async (req, res) => 
     const batch = await one(c,
       `UPDATE batches SET status='READY_FOR_ORDER', quantity=$2, available_quantity=$2, grade=$3, expected_weight_kg=COALESCE($4,expected_weight_kg), condition=$5,
          harvest_date=$6, attributes=COALESCE($7::jsonb, attributes), price_per_unit=COALESCE($8, price_per_unit), declaration_accepted_at=now() WHERE id=$1 RETURNING *`,
-      [b.id, d.actual_quantity, d.actual_grade, d.actual_weight_kg ?? null, d.actual_condition, d.actual_harvest_date, d.attributes ? JSON.stringify(d.attributes) : null, d.price_per_unit ?? null]);
+      [b.id, d.actual_quantity, d.actual_grade, d.actual_weight_kg ?? null, d.actual_condition, d.actual_harvest_date, JSON.stringify(mergedAttrs), d.price_per_unit ?? null]);
     await q(c,
       `INSERT INTO declaration_acceptances(supplier_id, user_id, declaration_version, product_id, batch_id, ip_address, user_agent, declared_snapshot)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8::jsonb)`,

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, BATCH_STATUS_LABEL, d, dt, errMsg, num, pct, rupiah } from '../../lib/api';
+import { api, attributeRows, BATCH_STATUS_LABEL, d, dt, errMsg, num, pct, rupiah } from '../../lib/api';
 import { Alert, AsyncButton, Badge, Card, EvidenceGallery, Field, statusTone, useAsync } from '../../components/ui';
-import { AttrField, attrLabel, fmtVal, KV, OPTIONAL_SERVICES, SummaryTable, useDebounced } from './shared';
+import { AttrField, fmtVal, KV, OPTIONAL_SERVICES, SummaryTable, useDebounced } from './shared';
 import { useAsync as useAsyncSvc } from '../../components/ui';
 
 const HARVEST_STAGE_LABEL: Record<string, string> = { UPCOMING: 'Akan panen', PRE_HARVEST_UPDATED: 'Menjelang panen (update)', FINAL: 'Panen final' };
@@ -39,7 +39,7 @@ export default function Listing() {
     // eslint-disable-next-line
   }, [debKey, l?.id, l?.status]);
 
-  if (loading) return <p className="muted">Memuat listing…</p>;
+  if (loading && !l) return <p className="muted">Memuat listing…</p>;
   if (error) return <Alert kind="error">{error}</Alert>;
   if (!l) return null;
 
@@ -60,7 +60,7 @@ export default function Listing() {
     ['Tanggal panen', d(l.harvest_date)], ['Tanggal tersedia', d(l.availability_date)],
     ['Kondisi', l.condition], ['Ukuran', l.size], ['Warna', l.color], ['Kesegaran', l.freshness], ['Kelembapan', l.moisture],
     ['Suhu (°C)', fmtVal(l.temperature_c)], ['Umur simpan (hari)', fmtVal(l.shelf_life_days)], ['Tanggal kedaluwarsa', d(l.expiry_date)],
-    ...Object.entries(attrs).map(([k, v]) => [attrLabel(schema, k), fmtVal(v)] as [string, any]),
+    ...attributeRows(schema, attrs, fmtVal),
   ];
   const productRows: [string, any][] = [
     ['Komoditas', l.commodity], ['Kategori', l.category_name], ['Varietas', l.variety], ['Asal', l.origin],

@@ -1,6 +1,6 @@
-# Laporan Uji — Supplier.id v1 (28 Sep 2026)
+# Laporan Uji — Supplier.id v1 (28 Sep 2026, diperbarui 4 Okt 2026)
 
-Lingkungan: Node 22.22, PostgreSQL 16.13, Vitest 5. Perintah: `cd server && npm test` → **3 file, 25 test, semua lolos** (unit 10, E2E 15). UI smoke test headless Chromium: 24 halaman × 3 peran terbuka tanpa error console/runtime/HTTP 500 (`docs/screenshots/`).
+Lingkungan: Node 22.22, PostgreSQL 16.13, Vitest 5. Perintah: `cd server && npm test` → **3 file, 27 test, semua lolos** (unit 10, E2E 17; tambahan 4 Okt: ganti kata sandi + pencabutan sesi, purge data uji dengan rekonsiliasi tetap seimbang). UI smoke test headless Chromium: 24 halaman × 3 peran terbuka tanpa error console/runtime/HTTP 500 (`docs/screenshots/`).
 
 ## Pemetaan Definition of Done (bagian W)
 
@@ -32,13 +32,21 @@ Tambahan: pembatalan setelah bayar (refund penuh kecuali payment fee, stok kemba
 
 Contoh angka (spesifikasi bagian M, unit test): produk Rp10.000.000 → fee 15% Rp1.500.000, packaging Rp250.000, logistik Rp500.000, payment fee Rp100.000, PPN jasa 11% × Rp2.250.000 = Rp247.500 (produk kebutuhan pokok dibebaskan) → total Rp12.597.500 = penjumlahan seluruh komponen.
 
+## Inspeksi produksi (4 Okt 2026, https://antarkitaindonesia.com/supplier-id + https://supplier-api.antarkitaindonesia.com)
+
+**API (skrip otomatis dari browser, 33/33 lolos):** health; login admin; akun demo tidak ada; mode unggah `direct`; fee 15%; 6 kategori; registrasi supplier & buyer; publish ditolak tanpa foto; 3 foto tersimpan di Supabase Storage & dapat diakses publik; publish READY_FOR_ORDER; listing publik; preview fee 15% & total = Σ komponen; RFQ → quote → counter → accept → order DRAFT; pembatalan setelah bayar → refund; snapshot terkunci saat konfirmasi; bayar (mock); tiba menunggu inspeksi; klaim tanpa bukti ditolak; partial accept → return case EVIDENCE_REVIEW; evidence comparison 3 kolom; adjustment prorata 10%; retur CLOSED; order SETTLED; rekonsiliasi order seimbang; dashboard supplier pending>0; payout PAID; override fee supplier 12% (order lama tetap 15%); quality score terhitung; rekonsiliasi global seimbang; dashboard monetisasi; buyer dilarang akses admin.
+
+**UI (klik manual di Chrome, akun UJI):** daftar supplier → tambah produk → daftarkan batch → unggah 3 foto (langsung ke Storage) → lengkapi atribut → setujui deklarasi → terpublikasi; daftar buyer → marketplace menampilkan listing → order summary transparan (Rp1.803.380 = Σ komponen) → konfirmasi (snapshot) → bayar; supplier packing → pickup (cold chain) → event tracking suhu → tiba; buyer inspeksi "diterima sebagian" 90/100 KG dengan foto + video → RET dibuat dengan eligibility check & perbandingan 3 kolom; admin keputusan Disetujui/atribusi SUPPLIER → refund Rp142.755, potongan supplier Rp148.953 (termasuk logistik retur Rp28.953) → pickup retur → supplier terima → CLOSED/SETTLED → payout Rp1.051.047 PAID; Ledger seimbang (variance Rp0); halaman Monetization, Fees, Tax, Konfigurasi, Supplier & Quality Score, Akun terbuka tanpa error console.
+
+**Temuan & perbaikan dari inspeksi UI:** (1) halaman detail order/retur/listing kosong ("Memuat…") saat refetch sehingga isian form inspeksi hilang setelah unggah bukti → konten kini tetap tampil saat refetch; (2) atribut kategori yang sama dengan kolom batch (kesegaran, ukuran, warna, tanggal panen) harus diisi dua kali → kini otomatis diisi dari kolom batch (server) dan tidak ditanyakan ulang di form; (3) tautan "Akun & kata sandi" bertumpuk dengan tombol Keluar → diperbaiki; (4) label atribut di perbandingan bukti retur tampil sebagai kunci mentah → kini memakai label skema kategori.
+
 ## Asumsi & keterbatasan data (dicantumkan agar tidak hilang saat dokumen beredar)
 
 1. **Pajak**: tarif/kelas PPN default adalah asumsi teknis (PPN 11% jasa platform; barang kebutuhan pokok dibebaskan; supplier non-PKP tidak memungut; payment fee pass-through). Belum divalidasi Finance/konsultan pajak. Semua dapat diubah dari Admin → Tax Engine (termasuk `dpp_factor` 11/12).
 2. **Payment gateway & kurir**: mock instan. Biaya provider gateway (`payment.provider_fee_*`) dan biaya logistik (`logistics.cost_ratio`) adalah parameter estimasi, bukan tagihan nyata.
 3. **Kebijakan refund** (`return.policy`) adalah usulan default: kesalahan SUPPLIER/PACKAGING → supplier menanggung produk & return logistics; LOGISTICS → platform klaim ke penyedia logistik (piutang), supplier tetap dibayar; BUYER_RECEIVING → tanpa refund; OTHER/UNDETERMINED → platform menanggung. Ini keputusan bisnis yang perlu ditetapkan GM/Legal.
 4. **Quality Score**: bobot & ambang enforcement default (return rate >10/15/20/30/40%) belum dikalibrasi dengan data nyata; `min_orders=3` agar demo terlihat — di produksi sebaiknya ≥10.
-5. Foto/video disimpan di disk lokal server tanpa deteksi stock-image otomatis (hanya deklarasi supplier + hash + timestamp); verifikasi visual tetap manusia.
+5. Foto/video disimpan di Supabase Storage (produksi) / disk lokal (dev) tanpa deteksi stock-image otomatis (hanya deklarasi supplier + hash + timestamp); verifikasi visual tetap manusia.
 6. Belum ada notifikasi push/email/WA; reminder pre-harvest tersedia sebagai endpoint & alert di dashboard supplier.
 
 ## Keputusan yang masih diperlukan dari GM

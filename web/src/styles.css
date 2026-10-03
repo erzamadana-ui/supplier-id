@@ -22,6 +22,8 @@ code { background: #eef1ee; padding: 1px 4px; border-radius: 4px; font-size: 12p
 .sidebar nav a.active, .sidebar nav a:hover { background: #1f4a31; color: #fff; }
 .sidebar .user { margin-top: 24px; border-top: 1px solid #244a34; padding-top: 12px; font-size: 12px; color: #b4cbbc; }
 .sidebar .user button { margin-top: 8px; }
+.sidebar .user a.small { display: block; margin-top: 8px; color: #e8f3ec; text-decoration: underline; padding: 0; background: none; }
+.sidebar .user a.small.active { color: #fff; font-weight: 600; }
 .main { padding: 22px 26px; max-width: 1400px; }
 .page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; margin-bottom: 16px; flex-wrap: wrap; }
 .page-head p { color: var(--muted); }

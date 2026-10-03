@@ -22,7 +22,7 @@ export default function OrderDetail() {
   const { data: o, error, loading, reload } = useAsync<any>(() => api.get(`/api/orders/${id}`), [id]);
   const recon = useAsync<any>(() => (role === 'ADMIN' ? api.get(`/api/orders/${id}/reconcile`) : Promise.resolve(null)), [id, role, o?.status]);
 
-  if (loading) return <p className="muted">Memuat order…</p>;
+  if (loading && !o) return <p className="muted">Memuat order…</p>;
   if (error) return <Alert kind="error">{error}</Alert>;
   if (!o) return null;
 

@@ -81,3 +81,13 @@ export const BATCH_STATUS_LABEL: Record<string, string> = {
 export const FAULT_LABEL: Record<string, string> = {
   SUPPLIER: 'Supplier', PACKAGING: 'Packaging', LOGISTICS: 'Logistik', BUYER_RECEIVING: 'Penerimaan buyer', OTHER: 'Lainnya', UNDETERMINED: 'Tidak dapat ditentukan',
 };
+
+/** Kolom batch yang juga menjadi kunci atribut kategori (ditampilkan sekali saja). */
+export const MIRRORED_ATTR_KEYS = ['grade', 'condition', 'size', 'color', 'freshness', 'moisture', 'temperature_c', 'harvest_date', 'availability_date', 'expiry_date', 'shelf_life_days', 'expected_weight_kg'];
+/** Baris atribut kategori untuk tampilan: label dari schema, lewati kunci yang sudah tampil sebagai kolom batch. */
+export function attributeRows(schema: { key: string; label: string; unit?: string }[] | null | undefined, attrs: Record<string, any> | null | undefined, fmt: (v: any) => any = (v) => v): [string, any][] {
+  const sc = schema ?? [];
+  return Object.entries(attrs ?? {})
+    .filter(([k]) => !MIRRORED_ATTR_KEYS.includes(k))
+    .map(([k, v]) => { const f = sc.find((x) => x.key === k); return [f ? `${f.label}${f.unit ? ` (${f.unit})` : ''}` : k, fmt(v)] as [string, any]; });
+}

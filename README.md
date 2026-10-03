@@ -58,8 +58,22 @@ Lihat `docs/LAPORAN-UJI.md` untuk pemetaan ke 21 butir Definition of Done.
 
 Semua nilai uang memiliki pricing snapshot per order, jurnal double-entry, dan dapat direkonsiliasi (`Admin → Ledger & Rekonsiliasi`).
 
+## Produksi (live)
+
+| Komponen | Lokasi |
+|---|---|
+| Web (statis, GitHub Pages) | https://antarkitaindonesia.com/supplier-id/ — repo `erzamadana-ui/antarkita-landing` folder `supplier-id/` (+ `404.html` SPA fallback) |
+| API (Vercel serverless, Hobby) | https://supplier-api.antarkitaindonesia.com (alias https://supplier-id.vercel.app) — repo `erzamadana-ui/supplier-id`, root `server/`, entry `api/index.ts` (migrasi + seed otomatis saat cold start) |
+| Database | Neon PostgreSQL (Singapore), `DATABASE_URL` dengan `sslmode=require` |
+| Foto/video bukti | Supabase Storage bucket `supplierid-evidence` (publik), unggah langsung dari browser via signed URL |
+
+Env Vercel: `DATABASE_URL`, `JWT_SECRET`, `CORS_ORIGINS`, `SUPABASE_URL`, `SUPABASE_SERVICE_KEY`, `SUPABASE_BUCKET`, `SEED_DEMO=false`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, `ADMIN_NAME`.
+Build web produksi: `cd web && VITE_BASE=/supplier-id/ VITE_API_URL=https://supplier-api.antarkitaindonesia.com npx vite build` → salin `dist/` ke `antarkita-landing/supplier-id/`.
+Pendaftaran supplier/buyer self-service di `/supplier-id/register`; ganti kata sandi di `/supplier-id/akun`; hapus data uji di Admin → Konfigurasi → Data uji.
+
 ## Catatan penting
 
 - Payment gateway dan logistik masih **mock** (instan, tanpa uang nyata). Integrasi Finpay/Midtrans dan kurir nyata tinggal mengganti adaptor di `routes/orders.ts` (`/pay`) dan `shipments`.
 - Nilai default pajak (PPN 11%, produk kebutuhan pokok dibebaskan, jasa platform dipungut) adalah **asumsi** dan wajib divalidasi Finance/konsultan pajak sebelum produksi — semuanya dapat diubah dari Admin Panel.
-- Kata sandi demo harus diganti; `JWT_SECRET` wajib diisi acak di produksi.
+- Akun demo hanya dibuat bila `SEED_DEMO` ≠ `false`; di produksi hanya admin dari env. Ganti kata sandi admin lewat `/akun` setelah serah terima; `JWT_SECRET` wajib acak.
+- Vercel Hobby **bukan untuk penggunaan komersial** menurut ketentuan Vercel — sebelum transaksi nyata, upgrade ke Vercel Pro (atau pindah ke Render/Railway/VPS; kode tidak bergantung pada Vercel kecuali `server/api/index.ts` + `vercel.json`). Cold start ±3–8 detik pada Hobby.

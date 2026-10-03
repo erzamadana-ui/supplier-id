@@ -1,6 +1,6 @@
 import { ReactElement, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, d, dt, FAULT_LABEL, num, pct, RETURN_STATUS_LABEL, rupiah } from '../lib/api';
+import { api, attributeRows, d, dt, FAULT_LABEL, num, pct, RETURN_STATUS_LABEL, rupiah } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { Alert, AsyncButton, Badge, Card, Empty, EvidenceGallery, Field, statusTone, Timeline, useAsync } from '../components/ui';
 import { BEARER_LABEL, compact, COMPONENT_LABEL, fmtVal, KV, shipmentEventItems } from './buyer/shared';
@@ -21,7 +21,7 @@ export default function ReturnDetail() {
   const { data, error, loading, reload } = useAsync<any>(() => api.get(`/api/returns/${id}`), [id]);
   const [decided, setDecided] = useState<any>(null);
 
-  if (loading) return <p className="muted">Memuat kasus retur…</p>;
+  if (loading && !data) return <p className="muted">Memuat kasus retur…</p>;
   if (error) return <Alert kind="error">{error}</Alert>;
   if (!data) return null;
 
@@ -83,7 +83,7 @@ export default function ReturnDetail() {
                 ['Produk', declared.product_name], ['Grade', declared.grade], ['Kuantitas', declared.quantity != null ? `${num(declared.quantity, 3)} ${unit}` : '-'],
                 ['Berat diharapkan (kg)', fmtVal(declared.expected_weight_kg)], ['Tanggal panen', d(declared.harvest_date)], ['Kondisi', declared.condition],
                 ['Ukuran', declared.size], ['Warna', declared.color], ['Kesegaran', declared.freshness], ['Suhu (°C)', fmtVal(declared.temperature_c)],
-                ...Object.entries(declared.attributes ?? {}).map(([k, v]) => [k, fmtVal(v)] as [string, any]),
+                ...attributeRows(declared.attribute_schema, declared.attributes, fmtVal),
               ]} />
             </div>
             <div style={{ marginTop: 10 }}>

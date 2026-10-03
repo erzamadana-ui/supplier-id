@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { api, rupiah, num, dt, d, errMsg, ApiError, BATCH_STATUS_LABEL } from '../../lib/api';
+import { api, rupiah, num, dt, d, errMsg, ApiError, BATCH_STATUS_LABEL, MIRRORED_ATTR_KEYS } from '../../lib/api';
 import { Card, Badge, statusTone, Alert, Field, Empty, EvidenceGallery, useAsync } from '../../components/ui';
 import { AttributeInputs, AttrField, attributeLabel, compact, nowLocal, toDateInput, BATCH_TYPE_LABEL, HARVEST_STAGE_LABEL, PHOTO_KIND_LABEL, OWNER_TYPE_LABEL, FIELD_LABEL } from './shared';
 
@@ -43,7 +43,7 @@ function Steps({ batch }: { batch: any }) {
 // ---------- Data deklarasi ----------
 function DeclarationData({ batch, reload }: { batch: any; reload: () => Promise<void> }) {
   const editable = batch.status === 'DRAFT';
-  const schema: AttrField[] = batch.attribute_schema ?? [];
+  const schema: AttrField[] = (batch.attribute_schema ?? []).filter((f: AttrField) => !MIRRORED_ATTR_KEYS.includes(f.key));
   const [edit, setEdit] = useState(false);
   const [f, setF] = useState<any>({});
   const [attrs, setAttrs] = useState<Record<string, any>>({});
@@ -56,7 +56,7 @@ function DeclarationData({ batch, reload }: { batch: any; reload: () => Promise<
       freshness: batch.freshness ?? '', moisture: batch.moisture ?? '', temperature_c: batch.temperature_c ?? '', shelf_life_days: batch.shelf_life_days ?? '', expiry_date: toDateInput(batch.expiry_date),
       price_per_unit: batch.price_per_unit ?? '',
     });
-    setAttrs({ ...(batch.attributes ?? {}) });
+    setAttrs(Object.fromEntries(schema.map((f: any) => [f.key, batch.attributes?.[f.key] ?? batch[f.key] ?? ''])));
     setErr(''); setEdit(true);
   };
   const set = (k: string, v: any) => setF((s: any) => ({ ...s, [k]: v }));
@@ -90,7 +90,7 @@ function DeclarationData({ batch, reload }: { batch: any; reload: () => Promise<
             <h3>Atribut kategori {batch.category_code}</h3>
             {schema.length === 0 && attrEntries.length === 0 ? <Empty>Tidak ada atribut tambahan.</Empty> : (
               <dl className="kv">
-                {schema.map((s) => <FragmentKV key={s.key} k={`${s.label}${s.unit ? ` (${s.unit})` : ''}${s.required ? ' *' : ''}`} v={batch.attributes?.[s.key]} />)}
+                {schema.map((s) => <FragmentKV key={s.key} k={`${s.label}${s.unit ? ` (${s.unit})` : ''}${s.required ? ' *' : ''}`} v={batch.attributes?.[s.key] ?? batch[s.key]} />)}
                 {attrEntries.filter(([k]) => !schema.some((s) => s.key === k)).map(([k, v]) => <FragmentKV key={k} k={attributeLabel(schema, k)} v={v} />)}
               </dl>
             )}
@@ -278,7 +278,7 @@ function PreHarvestForm({ batch, reload }: { batch: any; reload: () => Promise<v
 // ---------- Harvest: finalize ----------
 function FinalizeForm({ batch, declaration, minPhotos, reload }: { batch: any; declaration: any; minPhotos: number; reload: () => Promise<void> }) {
   const h = batch.harvest ?? {};
-  const schema: AttrField[] = batch.attribute_schema ?? [];
+  const schema: AttrField[] = (batch.attribute_schema ?? []).filter((f: AttrField) => !MIRRORED_ATTR_KEYS.includes(f.key));
   const [f, setF] = useState<any>({ actual_quantity: h.expected_quantity ?? '', actual_grade: h.expected_grade ?? batch.grade ?? '', actual_weight_kg: '', actual_condition: '', actual_harvest_date: toDateInput(new Date()), price_per_unit: batch.price_per_unit ?? '' });
   const [attrs, setAttrs] = useState<Record<string, any>>({ ...(batch.attributes ?? {}) });
   const [agree, setAgree] = useState(false);

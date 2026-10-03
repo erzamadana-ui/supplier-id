@@ -30,7 +30,7 @@ export async function runEligibilityCheck(db: Db, returnCaseId: string) {
 export async function evidenceComparison(db: Db, returnCaseId: string) {
   const rc = await one(db, `SELECT rc.*, rr.label AS reason_label FROM return_cases rc JOIN return_reason_codes rr ON rr.code=rc.reason_code WHERE rc.id=$1`, [returnCaseId]);
   const o = await one(db, 'SELECT * FROM orders WHERE id=$1', [rc.order_id]);
-  const batch = await one(db, `SELECT b.*, p.name AS product_name, p.commodity FROM batches b JOIN products p ON p.id=b.product_id WHERE b.id=$1`, [rc.batch_id]);
+  const batch = await one(db, `SELECT b.*, p.name AS product_name, p.commodity, c.attribute_schema FROM batches b JOIN products p ON p.id=b.product_id JOIN categories c ON c.id=p.category_id WHERE b.id=$1`, [rc.batch_id]);
   const harvest = await maybe(db, 'SELECT * FROM harvests WHERE batch_id=$1', [rc.batch_id]);
   const declaration = await maybe(db, 'SELECT * FROM declaration_acceptances WHERE batch_id=$1 ORDER BY accepted_at DESC LIMIT 1', [rc.batch_id]);
   const supplierPhotos = await q(db, `SELECT * FROM evidence_files WHERE batch_id=$1 AND owner_type IN ('BATCH','HARVEST_CURRENT','HARVEST_PRE','HARVEST_FINAL') ORDER BY uploaded_at`, [rc.batch_id]);
@@ -57,7 +57,7 @@ export async function evidenceComparison(db: Db, returnCaseId: string) {
     case: rc, order: o, dispute,
     before_delivery: {
       supplier_photos: supplierPhotos, declaration, harvest,
-      declared: { grade: batch.grade, quantity: batch.quantity, expected_weight_kg: batch.expected_weight_kg, harvest_date: batch.harvest_date, condition: batch.condition, size: batch.size, color: batch.color, freshness: batch.freshness, temperature_c: declaredTemp, attributes: batch.attributes, product_name: batch.product_name },
+      declared: { grade: batch.grade, quantity: batch.quantity, expected_weight_kg: batch.expected_weight_kg, harvest_date: batch.harvest_date, condition: batch.condition, size: batch.size, color: batch.color, freshness: batch.freshness, temperature_c: declaredTemp, attributes: batch.attributes, attribute_schema: batch.attribute_schema, product_name: batch.product_name },
     },
     delivery: { pickup_timestamp: shipment.pickup_at, arrived_timestamp: shipment.arrived_at, duration_hours: durationH, route: shipment.route, events, packaging: shipment.packaging_type, cold_chain: shipment.cold_chain, carrier: shipment.carrier },
     at_receiving: { buyer_photos: buyerEvidence.filter((e) => !e.kind.endsWith('VIDEO')), buyer_videos: buyerEvidence.filter((e) => e.kind.endsWith('VIDEO')), timestamp: insp.received_at, reported_damage: rc.reason_label, reason_code: rc.reason_code, quantity_affected: rc.quantity_affected, description: rc.description, measured_weight_kg: insp.measured_weight_kg, measured_temperature_c: insp.measured_temperature_c, decision: insp.decision },

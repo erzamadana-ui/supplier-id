@@ -8,7 +8,8 @@ Error: `{ error: "KODE", details?: any }` dengan status 400/401/403/404/409.
 |---|---|---|---|
 | POST | /auth/register | publik | `{email,password,name,role:'SUPPLIER'|'BUYER',orgName,supplierKind?,taxStatus:'PKP'|'NON_PKP',region?,address?}` → `{token,user,organization}` |
 | POST | /auth/login | publik | `{email,password}` → `{token,user:{id,email,name,role,orgId},organization}` |
-| GET | /auth/me | semua | `{user, organization}` |
+| GET | /auth/me | semua | `{user, organization}` — token diverifikasi ke DB (user terhapus / `token_version` berubah → 401) |
+| POST | /auth/change-password | semua | `{current_password,new_password(≥8)}` → `{ok,token}`; menaikkan `token_version` sehingga semua sesi lama dicabut; gunakan `token` baru untuk sesi ini |
 
 ## Katalog publik
 | GET | /categories | — | `[{id,code,name,attribute_schema:[{key,label,type:'select'|'text'|'number'|'date',required,options?,unit?}],tax_class,min_photos}]` |
@@ -22,6 +23,8 @@ POST `/evidence` — field `file` (image/* atau video/*) + metadata:
 `owner_type` (`BATCH`|`HARVEST_CURRENT`|`HARVEST_PRE`|`HARVEST_FINAL`|`INSPECTION`|`RETURN`|`SHIPMENT`), `kind` (`OVERALL`|`CLOSEUP`|`PACKAGING`|`CURRENT`|`PRE_HARVEST`|`FINAL`|`RECEIVING_PHOTO`|`RECEIVING_VIDEO`|`RETURN_PHOTO`|`RETURN_VIDEO`|`PICKUP`|`OTHER`), `batch_id?`, `order_id?`, `taken_at?`, `lat?`, `lng?`, `location_consent?` (lokasi hanya disimpan jika true), `is_stock_image` (true → ditolak 400 `STOCK_IMAGE_NOT_ALLOWED`).
 Video wajib untuk kind `*_VIDEO`. Response: baris `evidence_files` (`file_path` → tampilkan via `/uploads/<file_path>`).
 GET `/evidence?batch_id=|order_id=|return_case_id=`.
+
+**Unggah langsung ke Supabase Storage (produksi, melewati batas body 4,5 MB Vercel):** GET `/evidence/mode` → `{mode:'direct'|'multipart'}`; bila `direct`: POST `/evidence/sign {filename,media_type}` → `{key,upload_url}` → klien `PUT upload_url` (header `Content-Type`) → POST `/evidence/complete {…metadata di atas, key, media_type, sha256?}` → baris `evidence_files` dengan `file_path` berupa URL publik.
 
 ## Supplier (`/supplier/*`, peran SUPPLIER; ADMIN boleh dengan `?supplier_id=`)
 | GET | /supplier/products | `[{...product, category_code, category_name, attribute_schema, batch_count}]` |
@@ -82,4 +85,6 @@ Status order: DRAFT → PENDING_PAYMENT → PAID → PACKING → PICKED_UP → I
 | GET | /admin/quality · POST /admin/quality/recompute `{supplier_id?}` |
 | GET | /admin/ledger?order_id=&account=&limit= · GET /admin/ledger/balances · GET /admin/reconcile?order_id= · GET /admin/audit-logs |
 | GET | /admin/payouts `{pending:[{supplier_id,supplier_name,payable_balance,settled_unpaid_orders}],history[]}` · POST /admin/payouts/run `{supplier_id}` |
+| GET | /admin/test-data | pratinjau data uji (org bernama `UJI …` / email `uji-*@supplier.id`): `{organizations[],orders,evidence_files,ledger_journals}` |
+| POST | /admin/test-data/purge | `{confirm:'HAPUS DATA UJI'}` — hapus transaksional seluruh data uji (org, user, produk, batch, order, bukti + objek Storage, ledger, payout, override fee) → `{organizations,orders,evidence_files,storage_objects,reconciliation}` |
 | GET | /admin/monetization?from=&to= | `{cards:{gmv,paid_orders,product_value,platform_fee_revenue,average_take_rate_pct,packaging_revenue,packaging_cost,packaging_profit,logistics_revenue,logistics_cost,logistics_margin,payment_fees_collected,payment_processing_fee,optional_service_revenue,promotion_discount,tax,refunds,return_cases,return_cost,logistics_recovery,supplier_payable,net_revenue}, charts:{gmv_by_day[{day,gmv,revenue,platform_fee}],revenue_by_category[],revenue_by_buyer[],revenue_by_supplier[]}, current_platform_fee, reconciliation}` |

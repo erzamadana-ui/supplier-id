@@ -211,8 +211,8 @@ export function Staff() {
       <div className="grid cols-2">
         <Card title="Tambah staf / kurir">
           <Field label="Nama" required><input value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></Field>
-          <Field label="Email" required><input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></Field>
-          <Field label="Kata sandi awal (≥8, minta diganti)" required><input type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} /></Field>
+          <Field label="Email" required><input type="email" autoComplete="off" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></Field>
+          <Field label="Kata sandi awal (≥8, minta diganti)" required><input type="password" autoComplete="new-password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} /></Field>
           <div className="grid cols-2">
             <Field label="Jenis"><select value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}><option value="ADMIN">Staf admin</option><option value="COURIER">Kurir</option></select></Field>
             {f.role === 'ADMIN' && <Field label="Peran admin"><select value={f.admin_role} onChange={(e) => setF({ ...f, admin_role: e.target.value })}>{Object.keys(roles.data ?? {}).map((k) => <option key={k} value={k}>{k}</option>)}</select></Field>}

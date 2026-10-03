@@ -31,6 +31,11 @@ const DESC: Record<string, { label: string; hint: string; unit?: string; step?: 
   'evidence.min_photos': { label: 'Minimum foto deklarasi', hint: 'Per batch (kategori bisa menimpa lewat min_photos)', unit: 'foto' },
   'harvest.pre_harvest_reminder_days': { label: 'Pengingat pre-harvest', hint: 'Sistem meminta pre-harvest update H-n sebelum panen', unit: 'hari' },
   'return.claim_window_hours': { label: 'Batas waktu klaim', hint: 'Sejak barang tiba (arrived)', unit: 'jam' },
+  'confirmation.window_hours': { label: 'Jendela konfirmasi penerimaan', hint: 'confirmation_due_at = delivered_at (bukti sah) + n jam, waktu server', unit: 'jam' },
+  'payment.expiry_hours': { label: 'Kedaluwarsa pembayaran', hint: 'Order induk PENDING_PAYMENT lewat n jam → EXPIRED, stok dilepas (job)', unit: 'jam' },
+  'payout.sla_hours': { label: 'SLA payout', hint: 'Payment task belum PAID lewat n jam sejak dibuat → ditandai terlambat di dashboard ops', unit: 'jam' },
+  'supplier.response_hours': { label: 'Batas respons mitra', hint: 'Task ACCEPTANCE tanpa respons lewat n jam → LATE + eskalasi SUPPLIER_LATE', unit: 'jam' },
+  'delivery.max_attempts': { label: 'Maksimum percobaan antar', hint: 'Setelah n gagal antar → eskalasi DELIVERY_FAILED (kirim ulang/batal oleh ops)', unit: 'kali' },
 };
 
 /** Pratinjau & purge data uji (org "UJI …" / email uji-*@supplier.id) — transaksional, ledger tetap seimbang. */
@@ -100,6 +105,20 @@ function BoolSetting({ k, label, hint, row, save }: { k: string; label: string; 
         <input type="checkbox" checked={!!row?.value} onChange={(e) => save(k, e.target.checked, `${label}: ${e.target.checked ? 'aktif' : 'nonaktif'}`)} />
         <span><b>{label}</b> <code>{k}</code><br /><small className="muted">{hint}</small></span>
       </label>
+      <SettingMeta row={row} />
+    </div>
+  );
+}
+
+function ChoiceSetting({ k, label, hint, options, row, save }: { k: string; label: string; hint: string; options: string[]; row?: SettingRow; save: Saver }) {
+  const [reason, setReason] = useState('');
+  return (
+    <div className="card" style={{ marginBottom: 10 }}>
+      <div><b>{label}</b> <code>{k}</code><br /><small className="muted">{hint}</small></div>
+      <div className="row" style={{ marginTop: 8 }}>
+        <select value={String(row?.value ?? options[0])} onChange={(e) => save(k, e.target.value, reason || `${label} → ${e.target.value}`)}>{options.map((o) => <option key={o} value={o}>{o}</option>)}</select>
+        <input value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Alasan (opsional)" style={{ width: 260 }} />
+      </div>
       <SettingMeta row={row} />
     </div>
   );
@@ -281,7 +300,7 @@ export default function Settings() {
 
   const TABS = [
     { key: 'packaging', label: 'Packaging & Logistik' }, { key: 'payment', label: 'Payment' }, { key: 'evidence', label: 'Bukti & Deklarasi' },
-    { key: 'return', label: 'Retur & Refund policy' }, { key: 'quality', label: 'Quality Score' }, { key: 'promo', label: 'Layanan opsional & Promo' }, { key: 'all', label: 'Semua (JSON)' }, { key: 'testdata', label: 'Data uji' },
+    { key: 'return', label: 'Retur & Refund policy' }, { key: 'v2', label: 'Fulfillment & Payout (v2)' }, { key: 'quality', label: 'Quality Score' }, { key: 'promo', label: 'Layanan opsional & Promo' }, { key: 'all', label: 'Semua (JSON)' }, { key: 'testdata', label: 'Data uji' },
   ];
 
   return (
@@ -333,6 +352,30 @@ export default function Settings() {
               <div>
                 <BoolSetting k="evidence.location_optional" label="Metadata lokasi opsional" hint="Lokasi hanya disimpan bila pengguna menyetujui (location_consent)." row={map['evidence.location_optional']} save={save} />
                 <NumberSetting k="harvest.pre_harvest_reminder_days" row={map['harvest.pre_harvest_reminder_days']} save={save} />
+              </div>
+            </div>
+          )}
+
+          {tab === 'v2' && (
+            <div className="grid cols-2">
+              <div>
+                <h2>Konfirmasi penerimaan</h2>
+                <NumberSetting k="confirmation.window_hours" row={map['confirmation.window_hours']} save={save} />
+                <BoolSetting k="confirmation.auto_confirm_enabled" label="Auto-confirm setelah jendela berakhir" hint="Hanya bila pelanggan menyetujui di checkout, bukti pengiriman valid (OTP/verifikasi ops), pembayaran PAID, tanpa klaim/hold. Keputusan bisnis 4 Okt 2026: aktif." row={map['confirmation.auto_confirm_enabled']} save={save} />
+                <BoolSetting k="confirmation.require_valid_evidence" label="Wajib bukti sah untuk mulai jendela" hint="delivered_at hanya dari OTP penerima atau foto kurir yang diverifikasi ops; tanpa bukti → eskalasi, dana tidak dilepas." row={map['confirmation.require_valid_evidence']} save={save} />
+                <h2>Pengiriman</h2>
+                <BoolSetting k="delivery.otp_required" label="OTP wajib saat serah terima" hint="Nonaktif = kurir cukup foto + nama penerima, lalu ops memverifikasi bukti." row={map['delivery.otp_required']} save={save} />
+                <NumberSetting k="delivery.max_attempts" row={map['delivery.max_attempts']} save={save} />
+                <NumberSetting k="supplier.response_hours" row={map['supplier.response_hours']} save={save} />
+                <NumberSetting k="payment.expiry_hours" row={map['payment.expiry_hours']} save={save} />
+              </div>
+              <div>
+                <h2>Payout mitra</h2>
+                <ChoiceSetting k="payout.provider" label="Provider payout" hint="NONE = transfer manual oleh finance + catat bukti bank; MOCK = sandbox (uji alur PROCESSING→inquiry→PAID). Provider nyata belum terpasang." options={['NONE', 'MOCK']} row={map['payout.provider']} save={save} />
+                <BoolSetting k="payout.maker_checker_required" label="Maker–checker wajib" hint="Pengajuan (maker) dan persetujuan (checker) harus dua akun berbeda; ditegakkan server." row={map['payout.maker_checker_required']} save={save} />
+                <NumberSetting k="payout.sla_hours" row={map['payout.sla_hours']} save={save} />
+                <h2>Model dagang</h2>
+                <ChoiceSetting k="trade.platform_tax_status" label="Status pajak platform" hint="PKP = PPN atas margin reseller dihitung; NON_PKP = tidak. Per kategori: MARKETPLACE (fee 15%) atau RESELLER (markup) di menu Kategori." options={['NON_PKP', 'PKP']} row={map['trade.platform_tax_status']} save={save} />
               </div>
             </div>
           )}

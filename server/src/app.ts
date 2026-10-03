@@ -35,7 +35,8 @@ export function createApp() {
   app.use(authenticate);
 
   app.get('/api/health', (_req, res) => res.json({ ok: true, service: 'supplier-id', time: new Date().toISOString() }));
-  app.use('/api/auth', authRateLimit, authRouter);
+  app.use(['/api/auth/login', '/api/auth/register', '/api/auth/change-password'], authRateLimit);
+  app.use('/api/auth', authRouter);
   app.use('/api', catalogRouter);
   app.use('/api/evidence', evidenceRouter);
   app.use('/api/supplier', supplierRouter);

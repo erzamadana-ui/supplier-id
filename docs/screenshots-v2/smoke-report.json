@@ -1,0 +1,970 @@
+[
+ {
+  "role": "public",
+  "width": 360,
+  "path": "/",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 360,
+  "path": "/katalog",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 360,
+  "path": "/katalog/51f60145-7a93-40c9-8236-d522aa98ee10",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 360,
+  "path": "/mitra",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 360,
+  "path": "/cara-belanja",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 360,
+  "path": "/kebijakan",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 360,
+  "path": "/login",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 360,
+  "path": "/register",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 390,
+  "path": "/",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 390,
+  "path": "/katalog",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 390,
+  "path": "/katalog/51f60145-7a93-40c9-8236-d522aa98ee10",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 390,
+  "path": "/mitra",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 390,
+  "path": "/cara-belanja",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 390,
+  "path": "/kebijakan",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 390,
+  "path": "/login",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 390,
+  "path": "/register",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 768,
+  "path": "/",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 768,
+  "path": "/katalog",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 768,
+  "path": "/katalog/51f60145-7a93-40c9-8236-d522aa98ee10",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 768,
+  "path": "/mitra",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 768,
+  "path": "/cara-belanja",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 768,
+  "path": "/kebijakan",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 768,
+  "path": "/login",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 768,
+  "path": "/register",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 1440,
+  "path": "/",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 1440,
+  "path": "/katalog",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 1440,
+  "path": "/katalog/51f60145-7a93-40c9-8236-d522aa98ee10",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 1440,
+  "path": "/mitra",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 1440,
+  "path": "/cara-belanja",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 1440,
+  "path": "/kebijakan",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 1440,
+  "path": "/login",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "public",
+  "width": 1440,
+  "path": "/register",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 360,
+  "path": "/keranjang",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 360,
+  "path": "/checkout",
+  "errors": [
+   "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+  ],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 360,
+  "path": "/buyer/orders",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 360,
+  "path": "/orders/555eb5c6-e3d8-48f5-9abc-05654748dadf",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 360,
+  "path": "/orders/83843a92-1262-4657-a70f-b09054725acc",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 360,
+  "path": "/tiket",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 360,
+  "path": "/akun",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 390,
+  "path": "/keranjang",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 390,
+  "path": "/checkout",
+  "errors": [
+   "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+  ],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 390,
+  "path": "/buyer/orders",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 390,
+  "path": "/orders/555eb5c6-e3d8-48f5-9abc-05654748dadf",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 390,
+  "path": "/orders/83843a92-1262-4657-a70f-b09054725acc",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 390,
+  "path": "/tiket",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 390,
+  "path": "/akun",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 768,
+  "path": "/keranjang",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 768,
+  "path": "/checkout",
+  "errors": [
+   "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+  ],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 768,
+  "path": "/buyer/orders",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 768,
+  "path": "/orders/555eb5c6-e3d8-48f5-9abc-05654748dadf",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 768,
+  "path": "/orders/83843a92-1262-4657-a70f-b09054725acc",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 768,
+  "path": "/tiket",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 768,
+  "path": "/akun",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 1440,
+  "path": "/keranjang",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 1440,
+  "path": "/checkout",
+  "errors": [
+   "Failed to load resource: the server responded with a status of 400 (Bad Request)"
+  ],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 1440,
+  "path": "/buyer/orders",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 1440,
+  "path": "/orders/555eb5c6-e3d8-48f5-9abc-05654748dadf",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 1440,
+  "path": "/orders/83843a92-1262-4657-a70f-b09054725acc",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 1440,
+  "path": "/tiket",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "buyer",
+  "width": 1440,
+  "path": "/akun",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "supplier",
+  "width": 360,
+  "path": "/supplier/tasks",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "supplier",
+  "width": 360,
+  "path": "/supplier/tasks/c87af6cd-b4e1-4cdf-b7b2-d5c63faecac9",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "supplier",
+  "width": 360,
+  "path": "/supplier",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "supplier",
+  "width": 360,
+  "path": "/supplier/orders",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "supplier",
+  "width": 390,
+  "path": "/supplier/tasks",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "supplier",
+  "width": 390,
+  "path": "/supplier/tasks/c87af6cd-b4e1-4cdf-b7b2-d5c63faecac9",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "supplier",
+  "width": 390,
+  "path": "/supplier",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "supplier",
+  "width": 390,
+  "path": "/supplier/orders",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "supplier",
+  "width": 768,
+  "path": "/supplier/tasks",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "supplier",
+  "width": 768,
+  "path": "/supplier/tasks/c87af6cd-b4e1-4cdf-b7b2-d5c63faecac9",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "supplier",
+  "width": 768,
+  "path": "/supplier",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "supplier",
+  "width": 768,
+  "path": "/supplier/orders",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "supplier",
+  "width": 1440,
+  "path": "/supplier/tasks",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "supplier",
+  "width": 1440,
+  "path": "/supplier/tasks/c87af6cd-b4e1-4cdf-b7b2-d5c63faecac9",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "supplier",
+  "width": 1440,
+  "path": "/supplier",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "supplier",
+  "width": 1440,
+  "path": "/supplier/orders",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "courier",
+  "width": 360,
+  "path": "/courier",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "courier",
+  "width": 390,
+  "path": "/courier",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "courier",
+  "width": 768,
+  "path": "/courier",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "courier",
+  "width": 1440,
+  "path": "/courier",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 360,
+  "path": "/admin/ops",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 360,
+  "path": "/admin/escalations",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 360,
+  "path": "/admin/dispatch",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 360,
+  "path": "/admin/finance",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 360,
+  "path": "/admin/staff",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 360,
+  "path": "/admin/catalog",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 360,
+  "path": "/tiket",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 360,
+  "path": "/admin/ledger",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 390,
+  "path": "/admin/ops",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 390,
+  "path": "/admin/escalations",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 390,
+  "path": "/admin/dispatch",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 390,
+  "path": "/admin/finance",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 390,
+  "path": "/admin/staff",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 390,
+  "path": "/admin/catalog",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 390,
+  "path": "/tiket",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 390,
+  "path": "/admin/ledger",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 768,
+  "path": "/admin/ops",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 768,
+  "path": "/admin/escalations",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 768,
+  "path": "/admin/dispatch",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 768,
+  "path": "/admin/finance",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 768,
+  "path": "/admin/staff",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 768,
+  "path": "/admin/catalog",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 768,
+  "path": "/tiket",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 768,
+  "path": "/admin/ledger",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 1440,
+  "path": "/admin/ops",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 1440,
+  "path": "/admin/escalations",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 1440,
+  "path": "/admin/dispatch",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 1440,
+  "path": "/admin/finance",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 1440,
+  "path": "/admin/staff",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 1440,
+  "path": "/admin/catalog",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 1440,
+  "path": "/tiket",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "admin",
+  "width": 1440,
+  "path": "/admin/ledger",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "maker",
+  "width": 360,
+  "path": "/admin/finance",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "maker",
+  "width": 390,
+  "path": "/admin/finance",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "maker",
+  "width": 768,
+  "path": "/admin/finance",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "maker",
+  "width": 1440,
+  "path": "/admin/finance",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "checker",
+  "width": 360,
+  "path": "/admin/finance",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "checker",
+  "width": 390,
+  "path": "/admin/finance",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "checker",
+  "width": 768,
+  "path": "/admin/finance",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ },
+ {
+  "role": "checker",
+  "width": 1440,
+  "path": "/admin/finance",
+  "errors": [],
+  "scrollX": false,
+  "blank": false
+ }
+]

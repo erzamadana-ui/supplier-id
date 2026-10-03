@@ -41,10 +41,10 @@ function SchemaEditor({ value, onChange }: { value: Attr[]; onChange: (v: Attr[]
 }
 
 function CategoryCard({ c, onSaved, isNew, onCancel }: { c: any; onSaved: () => Promise<void>; isNew?: boolean; onCancel?: () => void }) {
-  const [f, setF] = useState({ code: c.code ?? '', name: c.name ?? '', tax_class: c.tax_class ?? 'STANDARD', min_photos: c.min_photos ?? '', packaging_rate_per_unit: c.packaging_rate_per_unit ?? '', active: c.active ?? true });
+  const [f, setF] = useState({ code: c.code ?? '', name: c.name ?? '', tax_class: c.tax_class ?? 'STANDARD', min_photos: c.min_photos ?? '', packaging_rate_per_unit: c.packaging_rate_per_unit ?? '', active: c.active ?? true, trade_model: c.trade_model ?? 'MARKETPLACE', reseller_markup_pct: c.reseller_markup_pct ?? 20, storage_instructions: c.storage_instructions ?? '', shelf_life_days_default: c.shelf_life_days_default ?? '' });
   const [schema, setSchema] = useState<Attr[]>(Array.isArray(c.attribute_schema) ? c.attribute_schema : []);
   const [open, setOpen] = useState(!!isNew);
-  useEffect(() => { setF({ code: c.code ?? '', name: c.name ?? '', tax_class: c.tax_class ?? 'STANDARD', min_photos: c.min_photos ?? '', packaging_rate_per_unit: c.packaging_rate_per_unit ?? '', active: c.active ?? true }); setSchema(Array.isArray(c.attribute_schema) ? c.attribute_schema : []); }, [c]);
+  useEffect(() => { setF({ code: c.code ?? '', name: c.name ?? '', tax_class: c.tax_class ?? 'STANDARD', min_photos: c.min_photos ?? '', packaging_rate_per_unit: c.packaging_rate_per_unit ?? '', active: c.active ?? true, trade_model: c.trade_model ?? 'MARKETPLACE', reseller_markup_pct: c.reseller_markup_pct ?? 20, storage_instructions: c.storage_instructions ?? '', shelf_life_days_default: c.shelf_life_days_default ?? '' }); setSchema(Array.isArray(c.attribute_schema) ? c.attribute_schema : []); }, [c]);
 
   const save = async () => {
     const code = String(f.code).trim().toUpperCase();
@@ -57,6 +57,8 @@ function CategoryCard({ c, onSaved, isNew, onCancel }: { c: any; onSaved: () => 
     await api.put(`/api/admin/categories/${code}`, {
       name: f.name, attribute_schema: clean, tax_class: f.tax_class, active: !!f.active,
       min_photos: f.min_photos === '' ? null : Number(f.min_photos), packaging_rate_per_unit: f.packaging_rate_per_unit === '' ? null : Number(f.packaging_rate_per_unit),
+      trade_model: f.trade_model, reseller_markup_pct: Number(f.reseller_markup_pct) || 0, storage_instructions: f.storage_instructions || null, shelf_life_days_default: f.shelf_life_days_default === '' ? null : Number(f.shelf_life_days_default),
+      reason: 'Ubah kategori via Admin',
     });
     await onSaved();
     if (isNew && onCancel) onCancel(); else setOpen(false);
@@ -64,7 +66,7 @@ function CategoryCard({ c, onSaved, isNew, onCancel }: { c: any; onSaved: () => 
 
   return (
     <Card
-      title={isNew ? 'Kategori baru' : <>{c.code} — {c.name} <Badge tone={c.tax_class === 'STANDARD' ? 'warn' : 'good'}>{c.tax_class}</Badge> {!c.active && <Badge tone="bad">Nonaktif</Badge>}</>}
+      title={isNew ? 'Kategori baru' : <>{c.code} — {c.name} <Badge tone={c.tax_class === 'STANDARD' ? 'warn' : 'good'}>{c.tax_class}</Badge> <Badge>{c.trade_model ?? 'MARKETPLACE'}{c.trade_model === 'RESELLER' ? ` +${c.reseller_markup_pct}%` : ''}</Badge> {!c.active && <Badge tone="bad">Nonaktif</Badge>}</>}
       actions={!isNew && <button type="button" className="btn small secondary" onClick={() => setOpen(!open)}>{open ? 'Tutup' : 'Ubah'}</button>}
     >
       {!open ? (
@@ -83,6 +85,10 @@ function CategoryCard({ c, onSaved, isNew, onCancel }: { c: any; onSaved: () => 
             <Field label="Min. foto deklarasi" hint="Kosong = ikut evidence.min_photos"><input type="number" min="0" step="1" value={f.min_photos} onChange={(e) => setF({ ...f, min_photos: e.target.value })} /></Field>
             <Field label="Tarif packaging per unit (Rp)" hint="Kosong = ikut packaging.rate_per_kg"><input type="number" min="0" step="1" value={f.packaging_rate_per_unit} onChange={(e) => setF({ ...f, packaging_rate_per_unit: e.target.value })} /></Field>
             <Field label="Aktif"><label className="row"><input type="checkbox" checked={!!f.active} onChange={(e) => setF({ ...f, active: e.target.checked })} /> tampil di katalog</label></Field>
+            <Field label="Model dagang" hint="MARKETPLACE: mitra penjual + platform fee. RESELLER: Supplier-ID membeli pada harga mitra, menjual dengan markup; margin = pendapatan"><select value={f.trade_model} onChange={(e) => setF({ ...f, trade_model: e.target.value })}><option value="MARKETPLACE">MARKETPLACE</option><option value="RESELLER">RESELLER</option></select></Field>
+            <Field label="Markup reseller (%)" hint="Hanya RESELLER"><input type="number" min="0" step="0.5" value={f.reseller_markup_pct} onChange={(e) => setF({ ...f, reseller_markup_pct: e.target.value })} /></Field>
+            <Field label="Instruksi penyimpanan default"><input value={f.storage_instructions} onChange={(e) => setF({ ...f, storage_instructions: e.target.value })} placeholder="mis. simpan 2–5°C" /></Field>
+            <Field label="Umur simpan default (hari)" hint="Dipakai label bila mitra tidak mengisi"><input type="number" min="0" value={f.shelf_life_days_default} onChange={(e) => setF({ ...f, shelf_life_days_default: e.target.value })} /></Field>
           </form>
           <h3 style={{ marginTop: 12 }}>Skema atribut (deklarasi kualitas)</h3>
           <SchemaEditor value={schema} onChange={setSchema} />

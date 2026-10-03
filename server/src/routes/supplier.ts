@@ -60,6 +60,11 @@ const batchSchema = z.object({
   expiry_date: z.string().optional(),
   attributes: z.record(z.string(), z.any()).default({}),
   price_per_unit: z.coerce.number().positive(),
+  min_order_qty: z.coerce.number().positive().optional(),
+  sale_mode: z.enum(['READY', 'PREORDER']).optional(),
+  lead_time_days: z.coerce.number().int().min(0).optional(),
+  cutoff_time: z.string().regex(/^\d{2}:\d{2}$/).optional(),
+  lot_code: z.string().optional(),
   // untuk HARVEST
   harvest: z.object({
     planting_date: z.string().optional(),
@@ -110,11 +115,13 @@ supplierRouter.post('/batches', asyncH(async (req, res) => {
     const code = await nextNo(c, 'batch', 'BATCH');
     const batch = await one(c,
       `INSERT INTO batches(product_id, supplier_id, type, status, batch_code, grade, quantity, available_quantity, unit, expected_weight_kg, weight_tolerance_pct,
-         harvest_date, availability_date, condition, size, color, freshness, moisture, temperature_c, shelf_life_days, expiry_date, attributes, price_per_unit)
-       VALUES ($1,$2,$3,'DRAFT',$4,$5,$6,$6,$7,$8,COALESCE($9,2.0),$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21) RETURNING *`,
+         harvest_date, availability_date, condition, size, color, freshness, moisture, temperature_c, shelf_life_days, expiry_date, attributes, price_per_unit,
+         min_order_qty, sale_mode, lead_time_days, cutoff_time, lot_code)
+       VALUES ($1,$2,$3,'DRAFT',$4,$5,$6,$6,$7,$8,COALESCE($9,2.0),$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb,$21,COALESCE($22,1),COALESCE($23,'READY'),COALESCE($24,1),$25,$26) RETURNING *`,
       [b.product_id, p.supplier_id, b.type, code, b.grade ?? null, b.quantity, b.unit, b.expected_weight_kg ?? null, b.weight_tolerance_pct ?? null,
         b.harvest_date ?? null, b.availability_date ?? null, b.condition ?? null, b.size ?? null, b.color ?? null, b.freshness ?? null, b.moisture ?? null,
-        b.temperature_c ?? null, b.shelf_life_days ?? null, b.expiry_date ?? null, JSON.stringify(b.attributes), b.price_per_unit]);
+        b.temperature_c ?? null, b.shelf_life_days ?? null, b.expiry_date ?? null, JSON.stringify(b.attributes), b.price_per_unit,
+        b.min_order_qty ?? null, b.type === 'HARVEST' ? 'PREORDER' : b.sale_mode ?? null, b.lead_time_days ?? null, b.cutoff_time ?? null, b.lot_code ?? null]);
     if (b.type === 'HARVEST' && b.harvest) {
       const h = b.harvest;
       await q(c,

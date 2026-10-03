@@ -1,0 +1,20 @@
+{
+  "name": "Supplier-ID — Hasil tani & ternak segar",
+  "short_name": "Supplier-ID",
+  "description": "Belanja hasil tani, ternak & laut langsung dari mitra. Portal mitra & kurir dapat dipasang sebagai aplikasi.",
+  "start_url": "/supplier-id/",
+  "scope": "/supplier-id/",
+  "display": "standalone",
+  "background_color": "#f7f6f1",
+  "theme_color": "#2f6b4f",
+  "lang": "id",
+  "icons": [
+    { "src": "/supplier-id/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/supplier-id/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Task inbox mitra", "url": "/supplier-id/supplier/tasks" },
+    { "name": "Manifest kurir", "url": "/supplier-id/courier" },
+    { "name": "Katalog", "url": "/supplier-id/katalog" }
+  ]
+}

@@ -1,19 +1,19 @@
-import { ReactElement, useState } from 'react';
+import { ReactElement, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { api, d, dt, errMsg, FAULT_LABEL, num, ORDER_STATUS_LABEL, pct, RETURN_STATUS_LABEL, rupiah } from '../lib/api';
+import { api, remaining, d, dt, errMsg, FAULT_LABEL, num, ORDER_STATUS_LABEL, pct, RETURN_STATUS_LABEL, rupiah } from '../lib/api';
 import { useAuth } from '../lib/auth';
 import { Alert, AsyncButton, Badge, Card, Empty, EvidenceGallery, Field, statusTone, Timeline, useAsync } from '../components/ui';
 import { compact, KV, shipmentEventItems, SummaryTable, TaxLines } from './buyer/shared';
 
-const STEPS = ['Konfirmasi', 'Bayar', 'Packing', 'Pickup', 'Perjalanan', 'Tiba', 'Inspeksi', 'Settle'];
+const STEPS = ['Konfirmasi', 'Bayar', 'Disiapkan', 'Packing', 'Pickup', 'Perjalanan', 'Tiba', 'Konfirmasi terima', 'Selesai'];
 const STEP_INDEX: Record<string, number> = {
-  DRAFT: 0, PENDING_PAYMENT: 1, PAID: 2, PACKING: 3, PICKED_UP: 4, IN_TRANSIT: 5, ARRIVED_WAITING_INSPECTION: 6,
-  ACCEPTED: 7, PARTIALLY_ACCEPTED: 7, REJECTED: 7, DISPUTED: 7, SETTLED: 8, CANCELLED: -1,
+  DRAFT: 0, PENDING_PAYMENT: 1, PAID: 2, PROCESSING: 3, PACKING: 3, READY_FOR_PICKUP: 4, PICKED_UP: 5, IN_TRANSIT: 6, DELIVERY_FAILED: 6, ARRIVED_WAITING_INSPECTION: 7,
+  ACCEPTED: 8, PARTIALLY_ACCEPTED: 8, REJECTED: 8, DISPUTED: 8, SETTLED: 9, CANCELLED: -1,
 };
 const PAYMENT_STATUS_LABEL: Record<string, string> = { PENDING: 'Menunggu', PAID: 'Dibayar', FAILED: 'Gagal', REFUNDED: 'Direfund', PARTIALLY_REFUNDED: 'Refund sebagian' };
-const SHIPMENT_STATUS_LABEL: Record<string, string> = { SCHEDULED: 'Dijadwalkan', PICKED_UP: 'Diambil', IN_TRANSIT: 'Dalam perjalanan', ARRIVED: 'Tiba', DELIVERED: 'Terkirim', RECEIVED: 'Diterima' };
+const SHIPMENT_STATUS_LABEL: Record<string, string> = { SCHEDULED: 'Dijadwalkan', PICKED_UP: 'Diambil', IN_TRANSIT: 'Dalam perjalanan', ARRIVED: 'Tiba', DELIVERED: 'Terkirim', RECEIVED: 'Diterima', DELIVERY_FAILED: 'Gagal antar', RETURNED: 'Dikembalikan' };
 const DECISION_LABEL: Record<string, string> = { ACCEPT: 'Diterima penuh', PARTIAL_ACCEPT: 'Diterima sebagian', REJECT: 'Ditolak' };
-const ADJ_TYPE_LABEL: Record<string, string> = { RETURN_REFUND: 'Refund retur', CANCELLATION: 'Pembatalan', MANUAL: 'Manual' };
+const ADJ_TYPE_LABEL: Record<string, string> = { RETURN_REFUND: 'Refund retur', CANCELLATION: 'Pembatalan', MANUAL: 'Manual', WEIGHT_SHORTAGE: 'Refund kekurangan berat', WEIGHT_SURCHARGE: 'Tambahan kelebihan berat' };
 
 export default function OrderDetail() {
   const { id } = useParams();
@@ -271,7 +271,10 @@ function Actions({ o, role, reload, lastDelivery, buyerEvidence }: { o: any; rol
       </div>,
     );
     if (['DRAFT', 'PENDING_PAYMENT'].includes(s)) items.push(<CancelForm key="cancel" o={o} reason={cancelReason} setReason={setCancelReason} reload={reload} />);
-    if (s === 'ARRIVED_WAITING_INSPECTION') items.push(<InspectionForm key="insp" o={o} buyerEvidence={buyerEvidence} reload={reload} onReturn={(rid) => nav(`/returns/${rid}`)} />);
+    if (o.weight_adjustment?.status === 'PENDING_CUSTOMER') items.push(<WeightDecision key="weight" o={o} reload={reload} />);
+    if (['READY_FOR_PICKUP', 'PICKED_UP', 'IN_TRANSIT', 'DELIVERY_FAILED'].includes(s) && lastDelivery) items.push(<OtpBox key="otp" o={o} />);
+    if (s === 'ARRIVED_WAITING_INSPECTION') items.push(<ConfirmWindow key="win" o={o} />, <InspectionForm key="insp" o={o} buyerEvidence={buyerEvidence} reload={reload} onReturn={(rid) => nav(`/returns/${rid}`)} />);
+    if (!['DRAFT', 'PENDING_PAYMENT', 'CANCELLED'].includes(s)) items.push(<div key="ticket"><Link to={`/tiket/baru?order_id=${o.id}`} className="btn secondary small">Butuh bantuan? Buat tiket CS</Link></div>);
   }
 
   // ---------- SUPPLIER / ADMIN ----------
@@ -439,6 +442,41 @@ function InspectionForm({ o, buyerEvidence, reload, onReturn }: { o: any; buyerE
         {partialInvalid && <small className="inline-error">Kuantitas diterima harus 0 &lt; x &lt; {num(qty, 3)}.</small>}
       </div>
       {result && !result.return_case && <Alert kind="success">Inspeksi tersimpan. Status order: {ORDER_STATUS_LABEL[result.order?.status] ?? result.order?.status}.</Alert>}
+    </div>
+  );
+}
+
+
+/** OTP penerimaan: diminta kurir saat serah terima; diterbitkan ulang setiap kali dibuka (hash lama tidak berlaku). */
+function OtpBox({ o }: { o: any }) {
+  const [otp, setOtp] = useState<any>(null); const [err, setErr] = useState('');
+  return (
+    <div key="otp">
+      <b>Kode penerimaan (OTP)</b>
+      <p className="muted"><small>Tunjukkan kode ini kepada kurir saat barang diterima. Kode memulai jendela konfirmasi {`24 jam`}.</small></p>
+      {otp ? <div className="otp-box" aria-live="polite">{otp.otp}</div> : <AsyncButton className="btn secondary" onClick={async () => { setErr(''); try { setOtp(await api.get(`/api/orders/${o.id}/delivery-otp`)); } catch (e) { setErr(errMsg(e)); throw e; } }}>Tampilkan OTP</AsyncButton>}
+      {err && <small className="inline-error">{err}</small>}
+    </div>
+  );
+}
+/** Sisa waktu konfirmasi (hitung dari waktu server; jam tetap berjalan saat aplikasi ditutup). */
+function ConfirmWindow({ o }: { o: any }) {
+  const [, tick] = useState(0);
+  useEffect(() => { const t = setInterval(() => tick((x) => x + 1), 30_000); return () => clearInterval(t); }, []);
+  if (!o.confirmation_due_at) return <Alert kind="warn">Bukti penerimaan sedang diverifikasi operasional; jendela konfirmasi belum dimulai.</Alert>;
+  const left = remaining(o.confirmation_due_at);
+  return <Alert kind={left === 'habis' ? 'warn' : 'info'}>Sisa waktu konfirmasi: <span className="countdown">{left}</span> (sampai {dt(o.confirmation_due_at)}). Tanpa respons, pesanan dianggap sesuai dan pembayaran mitra diproses.</Alert>;
+}
+/** Keputusan pelanggan atas kelebihan berat aktual (tidak ada penarikan dana diam-diam). */
+function WeightDecision({ o, reload }: { o: any; reload: () => Promise<void> }) {
+  const w = o.weight_adjustment;
+  return (
+    <div>
+      <Alert kind="warn"><b>Berat aktual melebihi estimasi.</b> Estimasi {num(w.expected, 2)} kg → aktual {num(w.actual, 2)} kg (+{num(w.delta_pct, 1)}%, di luar toleransi {num(w.tolerance_pct)}%). Tambahan nilai produk: <b>{rupiah(w.delta_value)}</b>.</Alert>
+      <div className="row">
+        <AsyncButton onClick={async () => { await api.post(`/api/orders/${o.id}/weight-decision`, { decision: 'APPROVE' }); await reload(); }} confirm={`Setujui pembayaran tambahan ${rupiah(w.delta_value)}?`}>Setuju bayar selisih</AsyncButton>
+        <AsyncButton className="btn secondary" onClick={async () => { await api.post(`/api/orders/${o.id}/weight-decision`, { decision: 'DECLINE' }); await reload(); }}>Minta dikemas sesuai toleransi</AsyncButton>
+      </div>
     </div>
   );
 }

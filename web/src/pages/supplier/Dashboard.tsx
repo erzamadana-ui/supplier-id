@@ -1,6 +1,8 @@
+import { useState } from 'react';
+import { SupplierPaymentTasks } from './Tasks';
 import { Link } from 'react-router-dom';
-import { api, rupiah, num, pct, dt, d, ORDER_STATUS_LABEL } from '../../lib/api';
-import { Card, Stat, Badge, statusTone, Alert, Empty, useAsync } from '../../components/ui';
+import { api, rupiah, num, pct, dt, d, errMsg, ORDER_STATUS_LABEL } from '../../lib/api';
+import { Card, Stat, Badge, statusTone, Alert, Empty, useAsync, Field, AsyncButton } from '../../components/ui';
 
 const ORG_STATUS_LABEL: Record<string, string> = {
   ACTIVE: 'Aktif', WARNING: 'Peringatan', VERIFICATION_REQUIRED: 'Perlu verifikasi tambahan', LISTING_LIMITED: 'Listing dibatasi',
@@ -126,12 +128,14 @@ export default function Dashboard() {
             <dt>Jenis</dt><dd>{org.supplier_kind ?? '-'}</dd>
             <dt>Status pajak</dt><dd>{org.tax_status ?? '-'}</dd>
             <dt>Wilayah</dt><dd>{org.region ?? '-'}</dd>
-            <dt>Rekening payout</dt><dd>{org.bank_account ?? '-'}</dd>
+            <dt>Rekening payout</dt><dd>{org.bank_account ? `${org.bank_name ?? ''} ${org.bank_account} a.n. ${org.bank_account_name ?? '-'}` : '-'} {org.bank_account && (org.bank_verified_at ? <Badge tone="good">terverifikasi</Badge> : <Badge tone="warn">menunggu verifikasi admin</Badge>)}</dd>
             <dt>Status</dt><dd><Badge tone={statusTone(org.status)}>{ORG_STATUS_LABEL[org.status] ?? org.status}</Badge> {org.status_reason && <small>— {org.status_reason}</small>}</dd>
           </dl>
         </Card>
       </div>
 
+      <BankForm org={org} reload={dash.reload} />
+      <SupplierPaymentTasks />
       <Card title="Hak per pesanan" actions={<Link className="btn secondary small" to="/supplier/orders">Kelola pesanan</Link>}>
         {orders.length === 0 ? <Empty>Belum ada pesanan.</Empty> : (
           <div className="table-wrap">
@@ -193,5 +197,22 @@ export default function Dashboard() {
         )}
       </Card>
     </>
+  );
+}
+
+function BankForm({ org, reload }: { org: any; reload: () => Promise<void> }) {
+  const [f, setF] = useState({ bank_name: org.bank_name ?? '', bank_account: org.bank_account ?? '', bank_account_name: org.bank_account_name ?? '' });
+  const [err, setErr] = useState('');
+  return (
+    <Card title="Rekening payout">
+      <p className="muted"><small>Perubahan rekening membatalkan status verifikasi dan tercatat di audit; admin memverifikasi ulang sebelum payment task diproses.</small></p>
+      {err && <Alert kind="error">{err}</Alert>}
+      <form className="inline" onSubmit={(e) => e.preventDefault()}>
+        <Field label="Bank" required><input value={f.bank_name} onChange={(e) => setF({ ...f, bank_name: e.target.value })} /></Field>
+        <Field label="Nomor rekening" required><input value={f.bank_account} onChange={(e) => setF({ ...f, bank_account: e.target.value })} /></Field>
+        <Field label="Atas nama" required><input value={f.bank_account_name} onChange={(e) => setF({ ...f, bank_account_name: e.target.value })} /></Field>
+        <div className="form-actions"><AsyncButton onClick={async () => { setErr(''); try { await api.put('/api/supplier/bank-account', f); await reload(); } catch (e) { setErr(errMsg(e)); throw e; } }}>Simpan rekening</AsyncButton></div>
+      </form>
+    </Card>
   );
 }

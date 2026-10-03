@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { errMsg, DEMO_MODE } from '../lib/api';
 import { Card, Alert } from '../components/ui';
@@ -16,18 +16,18 @@ const DEMO = [
 
 export default function LoginPage() {
   const { login } = useAuth();
-  const nav = useNavigate();
+  const nav = useNavigate(); const [sp] = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState(DEMO_MODE ? 'Password123' : '');
   const [err, setErr] = useState('');
   const go = async (e?: string) => {
     setErr('');
-    try { await login(e ?? email, password); nav('/'); } catch (x) { setErr(errMsg(x)); }
+    try { await login(e ?? email, password); nav(sp.get('next') ?? '/'); } catch (x) { setErr(errMsg(x)); }
   };
   return (
     <div className="login">
-      <Card title={<span>Supplier<span style={{ color: 'var(--brand)' }}>.id</span> — masuk</span>}>
-        <p className="muted">Marketplace B2B hasil tani, ternak & laut. DECLARE → PROVE → DELIVER → INSPECT → EVIDENCE → SETTLE.</p>
+      <Card title={<span>Supplier<span style={{ color: 'var(--brand)' }}>-ID</span> — masuk</span>}>
+        <p className="muted">Masuk sebagai pelanggan, mitra, kurir, atau admin. <Link to="/">← Beranda</Link></p>
         {err && <Alert kind="error">{err}</Alert>}
         <form onSubmit={(e) => { e.preventDefault(); go(); }}>
           <label className="field"><span className="field-label">Email</span><input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@perusahaan.id" /></label>

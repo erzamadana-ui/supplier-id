@@ -69,3 +69,11 @@ catalogRouter.get('/listings/:batchId', asyncH(async (req, res) => {
   const quality = await latestQualityScore(pool, b.supplier_id);
   res.json({ ...b, photos, harvest, declaration, supplier_quality: quality });
 }));
+
+/** Statistik publik (hanya dari data nyata): wilayah mitra aktif, jumlah mitra terverifikasi, kategori aktif. */
+catalogRouter.get('/public/stats', asyncH(async (_req, res) => {
+  const regions = await q(pool, `SELECT DISTINCT region FROM organizations WHERE type='SUPPLIER' AND status='ACTIVE' AND region IS NOT NULL ORDER BY region`);
+  const suppliers = await one(pool, `SELECT COUNT(*)::int AS n FROM organizations WHERE type='SUPPLIER' AND verified AND status='ACTIVE'`);
+  const listings = await one(pool, `SELECT COUNT(*)::int AS n FROM batches WHERE status='READY_FOR_ORDER'`);
+  res.json({ regions: regions.map((r) => r.region), verified_suppliers: suppliers.n, ready_listings: listings.n });
+}));

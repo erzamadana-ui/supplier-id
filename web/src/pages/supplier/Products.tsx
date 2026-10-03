@@ -51,7 +51,7 @@ function ProductForm({ categories, onCreated }: { categories: any[]; onCreated: 
 const emptyBatch = () => ({
   product_id: '', type: 'READY_STOCK', grade: '', quantity: '', unit: 'KG', expected_weight_kg: '', weight_tolerance_pct: '2',
   harvest_date: '', availability_date: '', condition: '', size: '', color: '', freshness: '', moisture: '', temperature_c: '', shelf_life_days: '', expiry_date: '',
-  price_per_unit: '',
+  price_per_unit: '', min_order_qty: '1', lead_time_days: '1', cutoff_time: '', lot_code: '',
 });
 const emptyHarvest = () => ({ planting_date: '', expected_harvest_date: '', expected_quantity: '', expected_grade: '', expected_quality: '', current_condition: '', forecast_confidence: '' });
 
@@ -120,6 +120,10 @@ function BatchForm({ products }: { products: any[] }) {
       </Field>
       <Field label="Perkiraan berat total (kg)"><input type="number" step="any" min={0} value={f.expected_weight_kg} onChange={(e) => set('expected_weight_kg', e.target.value)} /></Field>
       <Field label="Toleransi berat (%)" hint="0–50; default 2%"><input type="number" step="0.1" min={0} max={50} value={f.weight_tolerance_pct} onChange={(e) => set('weight_tolerance_pct', e.target.value)} /></Field>
+      <Field label="Minimum pesan (satuan)" hint="Pelanggan tidak bisa memesan di bawah ini"><input type="number" step="0.5" min={0} value={f.min_order_qty} onChange={(e) => set('min_order_qty', e.target.value)} /></Field>
+      <Field label="Lead time (hari)" hint="Waktu siap sejak pesanan dibayar"><input type="number" min={0} value={f.lead_time_days} onChange={(e) => set('lead_time_days', e.target.value)} /></Field>
+      <Field label="Jam cutoff pesanan" hint="HH:MM WIB; kosong = tanpa cutoff"><input type="time" value={f.cutoff_time} onChange={(e) => set('cutoff_time', e.target.value)} /></Field>
+      <Field label="Kode lot (opsional)" hint="Untuk telusur batch/recall"><input value={f.lot_code} onChange={(e) => set('lot_code', e.target.value)} /></Field>
       {!isHarvest && (
         <>
           <Field label="Tanggal panen" hint="Wajib salah satu: tanggal panen atau tanggal tersedia"><input type="date" value={f.harvest_date} onChange={(e) => set('harvest_date', e.target.value)} /></Field>

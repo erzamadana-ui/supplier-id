@@ -1,4 +1,5 @@
-export interface AuthUser { id: string; email: string; name: string; role: 'ADMIN' | 'SUPPLIER' | 'BUYER'; orgId: string | null }
+export interface AuthUser { id: string; email: string; name: string; role: 'ADMIN' | 'SUPPLIER' | 'BUYER' | 'COURIER'; orgId: string | null; adminRole?: string | null; permissions?: string[] }
+export const hasPerm = (u: AuthUser | null | undefined, p: string) => !!u && u.role === 'ADMIN' && ((u.permissions ?? []).includes('*') || (u.permissions ?? []).includes(p));
 
 const TOKEN_KEY = 'supplierid.token';
 /** Base URL API (kosong = origin yang sama / proxy Vite). Produksi: VITE_API_URL=https://supplier-api.antarkitaindonesia.com */
@@ -35,6 +36,7 @@ export const api = {
   post: <T = any>(url: string, body?: any) => call<T>('POST', url, body ?? {}),
   put: <T = any>(url: string, body?: any) => call<T>('PUT', url, body ?? {}),
   patch: <T = any>(url: string, body?: any) => call<T>('PATCH', url, body ?? {}),
+  delete: <T = any>(url: string) => call<T>('DELETE', url),
   /**
    * Unggah bukti foto/video. meta: owner_type, kind, batch_id/order_id, taken_at, lat, lng, location_consent.
    * Mode 'direct' (produksi): minta signed URL → unggah langsung ke Supabase Storage → catat metadata. Mode 'multipart' (lokal): lewat API.
@@ -67,7 +69,7 @@ export const d = (s: string | null | undefined) => (s ? new Date(s).toLocaleDate
 export const errMsg = (e: any) => (e instanceof ApiError ? `${e.message}${e.details ? ' — ' + JSON.stringify(e.details) : ''}` : String(e?.message ?? e));
 
 export const ORDER_STATUS_LABEL: Record<string, string> = {
-  DRAFT: 'Draft', PENDING_PAYMENT: 'Menunggu pembayaran', PAID: 'Dibayar', PACKING: 'Packing', PICKED_UP: 'Diambil kurir', IN_TRANSIT: 'Dalam perjalanan',
+  DRAFT: 'Draft', PENDING_PAYMENT: 'Menunggu pembayaran', PAID: 'Dibayar — menunggu mitra', PROCESSING: 'Disiapkan mitra', PACKING: 'Packing', READY_FOR_PICKUP: 'Siap dijemput kurir', PICKED_UP: 'Diambil kurir', IN_TRANSIT: 'Dalam perjalanan', DELIVERY_FAILED: 'Gagal antar',
   ARRIVED_WAITING_INSPECTION: 'Tiba — menunggu inspeksi', ACCEPTED: 'Diterima', PARTIALLY_ACCEPTED: 'Diterima sebagian', REJECTED: 'Ditolak',
   DISPUTED: 'Dispute', SETTLED: 'Selesai (settled)', CANCELLED: 'Dibatalkan',
 };
@@ -90,4 +92,17 @@ export function attributeRows(schema: { key: string; label: string; unit?: strin
   return Object.entries(attrs ?? {})
     .filter(([k]) => !MIRRORED_ATTR_KEYS.includes(k))
     .map(([k, v]) => { const f = sc.find((x) => x.key === k); return [f ? `${f.label}${f.unit ? ` (${f.unit})` : ''}` : k, fmt(v)] as [string, any]; });
+}
+
+export const TASK_STAGE_LABEL: Record<string, string> = { ACCEPTANCE: 'Terima/Tolak', PRODUCTION: 'Produksi/Panen', PICKING: 'Picking', QC: 'QC & timbang', PACKING: 'Packing & label', HANDOVER: 'Serah ke kurir' };
+export const TASK_STATUS_LABEL: Record<string, string> = { NEW: 'Baru', AWAITING_RESPONSE: 'Menunggu respons', IN_PROGRESS: 'Dikerjakan', NEEDS_ACTION: 'Perlu tindakan', LATE: 'Terlambat', DONE: 'Selesai', REJECTED: 'Ditolak', CANCELLED: 'Dibatalkan' };
+export const PT_STATUS_LABEL: Record<string, string> = { ON_HOLD: 'Ditahan', CREATED: 'Dibuat', PENDING_APPROVAL: 'Menunggu persetujuan', APPROVED: 'Disetujui', PROCESSING: 'Diproses', PAID: 'Dibayar', FAILED: 'Gagal', REJECTED: 'Ditolak', REVERSED: 'Dibalik (reversal)', CANCELLED: 'Dibatalkan' };
+export const PKG_STATUS_LABEL: Record<string, string> = { PACKED: 'Dikemas', HANDED_OVER: 'Diserahkan', PICKED_UP: 'Diambil kurir', IN_TRANSIT: 'Dalam perjalanan', DELIVERED: 'Diantar', RECEIVED: 'Diterima', CANCELLED: 'Dibatalkan', LOST: 'Hilang' };
+/** Sisa waktu "hh:mm" sampai tenggat (waktu server). */
+export function remaining(due: string | null | undefined) {
+  if (!due) return null;
+  const ms = new Date(due).getTime() - Date.now();
+  if (ms <= 0) return 'habis';
+  const h = Math.floor(ms / 3600_000), m = Math.floor((ms % 3600_000) / 60_000);
+  return `${h} jam ${m} mnt`;
 }

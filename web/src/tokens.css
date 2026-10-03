@@ -1,0 +1,49 @@
+/*
+ * SUPPLIER-ID DESIGN TOKENS (v2) — sumber: 3 gambar referensi yang diunggah Erza 4 Okt 2026 (docs/DESIGN-SYSTEM.md).
+ * Warna HEX diukur dari gambar (kuantisasi 12 warna). Font & ukuran spasi/radius = ESTIMASI dari proporsi gambar, ditandai [est].
+ * Semua komponen memakai variabel ini; mengubah identitas = mengubah berkas ini.
+ */
+:root {
+  /* Latar & permukaan — My Farm (#FBFAF6, #E2D6B7), Portu (#F5F5F6) */
+  --bg: #f7f6f1;
+  --bg-2: #efede6;
+  --surface: #ffffff;
+  --surface-2: #fbfaf6;
+  --line: #e4e1d7;
+  --line-2: #d6d2c6;
+  /* Teks — My Farm brown-black (#090808/#543A23), Portu navy (#37395E) */
+  --text: #1f2a24;
+  --text-2: #4a5a50;
+  --muted: #6b7a70;
+  --navy: #282445;      /* infografis — judul/aksen gelap */
+  /* Brand hijau — diturunkan dari My Farm #506B5D / #6CA688 (kontras AA ≥ 4.5 terhadap putih) [est] */
+  --brand: #2f6b4f;
+  --brand-strong: #1f4a35;
+  --brand-2: #e6f1ea;
+  --brand-3: #cfe4d7;
+  /* Aksen hangat — My Farm oranye #DF9C6C, Portu salmon #ED9C7A; CTA sekunder & highlight */
+  --accent: #df9c6c;
+  --accent-2: #fbeee3;
+  --accent-text: #8a4b1e;
+  /* Status — koral infografis #EB7867 (bahaya), kuning My Farm #F1D85B (peringatan), hijau (sukses), biru-abu infografis #5E6A94 (info) */
+  --danger: #c9533f; --danger-2: #fbe9e5;
+  --warn: #8a6300; --warn-2: #fff6d6;
+  --good: #2f6b4f; --good-2: #e6f1ea;
+  --info: #5e6a94; --info-2: #eceef5;
+  /* Bentuk — kartu Portu radius ±16–24 px [est], tombol pil My Farm */
+  --radius: 10px;
+  --radius-lg: 16px;
+  --radius-pill: 999px;
+  --shadow: 0 1px 2px rgba(31,42,36,.05), 0 6px 18px rgba(31,42,36,.07);   /* Portu: bayangan lembut */
+  --shadow-lg: 0 12px 32px rgba(31,42,36,.12);
+  /* Tipografi — Inter [est]; judul landing bold besar (My Farm) */
+  --font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --fs-xs: 11px; --fs-sm: 12px; --fs-md: 14px; --fs-lg: 16px; --fs-xl: 20px; --fs-2xl: 28px; --fs-hero: clamp(32px, 6vw, 56px);
+  --lh: 1.45;
+  /* Spasi (grid 4 px) & lebar — gutter ±24 px [est] */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px; --sp-7: 48px;
+  --container: 1200px;
+  /* Ukuran sentuh minimum (aksesibilitas) */
+  --tap: 44px;
+  --icon: 20px;
+}

@@ -435,3 +435,48 @@ describe('RFQ → quotation → negosiasi → order; pembatalan; ledger global',
     await buyer.get('/api/admin/monetization', 403);
   });
 });
+
+describe('Operasional komersil: ganti kata sandi & purge data uji', () => {
+  it('ganti kata sandi: kata sandi lama salah ditolak, kata sandi baru dapat login', async () => {
+    const u = new Api(app);
+    u.token = (await u.post('/api/auth/register', { email: 'ganti@supplier.id', password: 'Lama12345', name: 'Ganti Sandi', role: 'BUYER', orgName: 'Ganti Sandi Org' }, 201)).token;
+    await u.post('/api/auth/change-password', { current_password: 'salah', new_password: 'Baru12345!' }, 401);
+    await u.post('/api/auth/change-password', { current_password: 'Lama12345', new_password: 'pendek' }, 400);
+    const old = u.token;
+    const r = await u.post('/api/auth/change-password', { current_password: 'Lama12345', new_password: 'Baru12345!' }, 200);
+    await u.get('/api/auth/me', 401); // token lama dicabut
+    u.token = r.token; await u.get('/api/auth/me', 200); // token baru dari respons berlaku
+    await u.login('ganti@supplier.id', 'Baru12345!');
+    expect(old).not.toBe(u.token);
+  });
+
+  it('purge data uji: org UJI beserta order/ledger/bukti terhapus, data lain utuh, rekonsiliasi tetap seimbang', async () => {
+    const sup = new Api(app), buy = new Api(app);
+    sup.token = (await sup.post('/api/auth/register', { email: 'uji-supplier-t@supplier.id', password: 'UjiProd#2026', name: 'UJI SUPPLIER', role: 'SUPPLIER', orgName: 'UJI Kelompok Tani T', supplierKind: 'KELOMPOK_TANI' }, 201)).token;
+    buy.token = (await buy.post('/api/auth/register', { email: 'uji-buyer-t@supplier.id', password: 'UjiProd#2026', name: 'UJI BUYER', role: 'BUYER', orgName: 'UJI Resto T', taxStatus: 'PKP' }, 201)).token;
+    const pub = await publishReadyStock(sup, { code: 'SAYUR', name: 'UJI Bayam', commodity: 'Bayam', qty: 200, price: 10000, attributes: { freshness: 'Baru panen (<24 jam)', size: 'Sedang', color: 'Hijau', harvest_date: '2026-09-27', defect_tolerance_pct: 5 } });
+    const { order } = await orderToArrival(buy, sup, pub.id, 100);
+    const ins = await buy.post(`/api/orders/${order.id}/inspection`, { decision: 'ACCEPT' });
+    expect(ins.order.status).toBe('SETTLED');
+    const before = await admin.get('/api/admin/reconcile');
+    const totalBefore = await pool.query('SELECT count(*)::int AS n FROM orders');
+    const preview = await admin.get('/api/admin/test-data');
+    expect(preview.organizations.length).toBe(2);
+    expect(preview.orders).toBe(1);
+    await admin.post('/api/admin/test-data/purge', { confirm: 'salah' }, 400);
+    const r = await admin.post('/api/admin/test-data/purge', { confirm: 'HAPUS DATA UJI' });
+    expect(r.organizations).toBe(2);
+    expect(r.orders).toBe(1);
+    expect(r.evidence_files).toBe(3);
+    expect(r.reconciliation.balanced).toBe(true);
+    const totalAfter = await pool.query('SELECT count(*)::int AS n FROM orders');
+    expect(totalAfter.rows[0].n).toBe(totalBefore.rows[0].n - 1);
+    expect((await pool.query(`SELECT count(*)::int AS n FROM users WHERE email LIKE 'uji-%'`)).rows[0].n).toBe(0);
+    expect((await pool.query(`SELECT count(*)::int AS n FROM organizations WHERE name LIKE 'UJI %'`)).rows[0].n).toBe(0);
+    // Money In turun tepat sebesar pembayaran order uji; sisanya tidak berubah
+    const after = await admin.get('/api/admin/reconcile');
+    expect(after.moneyIn).toBe(sum([before.moneyIn, -Number(order.total_amount)]));
+    expect(after.unbalancedJournals.length).toBe(0);
+    await sup.get('/api/auth/me', 401);
+  });
+});

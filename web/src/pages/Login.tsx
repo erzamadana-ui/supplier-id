@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../lib/auth';
 import { errMsg, DEMO_MODE } from '../lib/api';
 import { Card, Alert } from '../components/ui';
@@ -33,6 +33,7 @@ export default function LoginPage() {
           <label className="field"><span className="field-label">Email</span><input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="email@perusahaan.id" /></label>
           <label className="field"><span className="field-label">Kata sandi</span><input type="password" value={password} onChange={(e) => setPassword(e.target.value)} /></label>
           <button className="btn" type="submit">Masuk</button>
+          <span style={{ marginLeft: 12 }}><Link to="/register">Belum punya akun? Daftar</Link></span>
         </form>
         {DEMO_MODE && <div className="demo">
           <small>Akun demo (sandi: Password123):</small>

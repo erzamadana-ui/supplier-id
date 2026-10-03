@@ -48,3 +48,23 @@ export async function objectExists(key: string): Promise<{ ok: boolean; size?: n
   const r = await fetch(publicUrl(key), { method: 'HEAD' });
   return { ok: r.ok, size: Number(r.headers.get('content-length') || 0), type: r.headers.get('content-type') || undefined };
 }
+
+/** Hapus objek di Storage (dipakai purge data uji). URL publik → key. Gagal tidak melempar; mengembalikan jumlah yang terhapus. */
+export async function deleteObjects(filePaths: string[]): Promise<number> {
+  if (storageMode !== 'supabase') {
+    let n = 0;
+    for (const p of filePaths) { try { fs.unlinkSync(path.join(process.env.UPLOAD_DIR || path.join(process.cwd(), 'uploads'), path.basename(p))); n++; } catch { /* abaikan */ } }
+    return n;
+  }
+  const prefix = `${SUPABASE_URL}/storage/v1/object/public/${SUPABASE_BUCKET}/`;
+  const keys = filePaths.filter((p) => p.startsWith(prefix)).map((p) => p.slice(prefix.length));
+  if (!keys.length) return 0;
+  const r = await fetch(`${SUPABASE_URL}/storage/v1/object/${SUPABASE_BUCKET}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${SUPABASE_SERVICE_KEY}`, apikey: SUPABASE_SERVICE_KEY!, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prefixes: keys }),
+  });
+  if (!r.ok) return 0;
+  const j = (await r.json().catch(() => [])) as unknown[];
+  return Array.isArray(j) ? j.length : keys.length;
+}

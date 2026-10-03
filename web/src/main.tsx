@@ -4,6 +4,8 @@ import { BrowserRouter, Routes, Route, Navigate, NavLink, useLocation } from 're
 import './styles.css';
 import { AuthProvider, useAuth } from './lib/auth';
 import LoginPage from './pages/Login';
+import RegisterPage from './pages/Register';
+import AccountPage from './pages/Account';
 import SupplierDashboard from './pages/supplier/Dashboard';
 import SupplierProducts from './pages/supplier/Products';
 import SupplierBatchDetail from './pages/supplier/BatchDetail';
@@ -68,6 +70,7 @@ function Shell({ children }: { children: React.ReactNode }) {
           <div><b>{user.name}</b></div>
           <div>{organization?.name ?? 'Supplier.id'}</div>
           <div>{user.email}</div>
+          <NavLink to="/akun" className="small">Akun & kata sandi</NavLink>
           <button className="btn secondary small" onClick={logout}>Keluar</button>
         </div>
       </aside>
@@ -94,6 +97,8 @@ function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/register" element={<RegisterPage />} />
+      <Route path="/akun" element={<Shell><AccountPage /></Shell>} />
       <Route path="/" element={<Home />} />
       <Route path="/supplier" element={<Guard role="SUPPLIER"><SupplierDashboard /></Guard>} />
       <Route path="/supplier/products" element={<Guard role="SUPPLIER"><SupplierProducts /></Guard>} />

@@ -1,6 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { ZodSchema } from 'zod';
+import { pool, maybe } from '../db';
 
 export const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-change-me';
 
@@ -29,15 +30,21 @@ declare global {
   }
 }
 
-export function signToken(u: AuthUser) {
-  return jwt.sign(u, JWT_SECRET, { expiresIn: '7d' });
+export function signToken(u: AuthUser, tokenVersion = 0) {
+  return jwt.sign({ ...u, tv: tokenVersion }, JWT_SECRET, { expiresIn: '7d' });
 }
 
-export function authenticate(req: Request, _res: Response, next: NextFunction) {
+/**
+ * Autentikasi JWT + verifikasi ke DB: user masih ada dan token_version cocok
+ * (ganti kata sandi / penghapusan akun mencabut token lama). Token tidak valid → anonim.
+ */
+export async function authenticate(req: Request, _res: Response, next: NextFunction) {
   const h = req.headers.authorization;
   if (h?.startsWith('Bearer ')) {
     try {
-      req.user = jwt.verify(h.slice(7), JWT_SECRET) as AuthUser;
+      const t = jwt.verify(h.slice(7), JWT_SECRET) as AuthUser & { tv?: number };
+      const row = await maybe<{ role: AuthUser['role']; org_id: string | null; token_version: number }>(pool, 'SELECT role, org_id, token_version FROM users WHERE id=$1', [t.id]);
+      if (row && (t.tv ?? 0) === row.token_version) req.user = { id: t.id, email: t.email, name: t.name, role: row.role, orgId: row.org_id };
     } catch {
       /* token tidak valid → anonim */
     }

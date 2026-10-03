@@ -33,6 +33,39 @@ const DESC: Record<string, { label: string; hint: string; unit?: string; step?: 
   'return.claim_window_hours': { label: 'Batas waktu klaim', hint: 'Sejak barang tiba (arrived)', unit: 'jam' },
 };
 
+/** Pratinjau & purge data uji (org "UJI …" / email uji-*@supplier.id) — transaksional, ledger tetap seimbang. */
+function TestDataPanel() {
+  const preview = useAsync(() => api.get('/api/admin/test-data'), []);
+  const [result, setResult] = useState<any>(null);
+  const [confirm, setConfirm] = useState('');
+  const d = preview.data;
+  return (
+    <div className="grid cols-2">
+      <Card title="Data uji yang terdeteksi">
+        {preview.loading && <p>Memuat…</p>}
+        {preview.error && <Alert kind="error">{preview.error}</Alert>}
+        {d && (!d.organizations.length ? <Empty>Tidak ada data uji. Database bersih.</Empty> : (
+          <>
+            <p>{d.organizations.length} organisasi · {d.orders} order · {d.evidence_files} berkas bukti · {d.ledger_journals} jurnal ledger</p>
+            <ul>{d.organizations.map((o: any) => <li key={o.id}><Badge>{o.type}</Badge> {o.name}</li>)}</ul>
+          </>
+        ))}
+      </Card>
+      <Card title="Hapus data uji">
+        <p className="muted"><small>Menghapus organisasi uji beserta user, produk, batch, order, bukti (termasuk objek di Storage), ledger, payout, dan override fee-nya dalam satu transaksi. Data produksi lain tidak disentuh. Ketik <code>HAPUS DATA UJI</code> untuk konfirmasi.</small></p>
+        <input value={confirm} onChange={(e) => setConfirm(e.target.value)} placeholder="HAPUS DATA UJI" />
+        <div style={{ marginTop: 8 }}>
+          <AsyncButton className="btn danger" disabled={confirm !== 'HAPUS DATA UJI' || !d?.organizations?.length} confirm="Hapus seluruh data uji sekarang? Tindakan ini permanen."
+            onClick={async () => { setResult(await api.post('/api/admin/test-data/purge', { confirm })); setConfirm(''); await preview.reload(); }}>
+            Hapus data uji
+          </AsyncButton>
+        </div>
+        {result && <Alert kind="success">Terhapus: {result.organizations} organisasi, {result.orders} order, {result.evidence_files} bukti ({result.storage_objects} objek Storage). Rekonsiliasi: {result.reconciliation?.balanced ? 'seimbang' : 'TIDAK SEIMBANG'}.</Alert>}
+      </Card>
+    </div>
+  );
+}
+
 function SettingMeta({ row }: { row?: SettingRow }) {
   if (!row) return <small className="muted">Belum ada di database — akan dibuat saat disimpan.</small>;
   return <small className="muted">{row.description ? row.description + ' · ' : ''}diperbarui {dt(row.updated_at)}</small>;
@@ -248,7 +281,7 @@ export default function Settings() {
 
   const TABS = [
     { key: 'packaging', label: 'Packaging & Logistik' }, { key: 'payment', label: 'Payment' }, { key: 'evidence', label: 'Bukti & Deklarasi' },
-    { key: 'return', label: 'Retur & Refund policy' }, { key: 'quality', label: 'Quality Score' }, { key: 'promo', label: 'Layanan opsional & Promo' }, { key: 'all', label: 'Semua (JSON)' },
+    { key: 'return', label: 'Retur & Refund policy' }, { key: 'quality', label: 'Quality Score' }, { key: 'promo', label: 'Layanan opsional & Promo' }, { key: 'all', label: 'Semua (JSON)' }, { key: 'testdata', label: 'Data uji' },
   ];
 
   return (
@@ -327,6 +360,8 @@ export default function Settings() {
               <JsonSetting k="promotions" title="Kode promo" hint="Array {code,label,mode,value,max?,active}. Diskon ditanggung platform (beban PROMOTION_DISCOUNT)." row={map['promotions']} save={save} />
             </div>
           )}
+
+          {tab === 'testdata' && <TestDataPanel />}
 
           {tab === 'all' && (
             <Card title="Semua setting (raw JSON)">

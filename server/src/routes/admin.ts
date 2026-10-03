@@ -5,6 +5,7 @@ import { asyncH, parse, bad, requireRole, conflict, money } from '../lib/http';
 import { audit, getSetting, setSetting, resolvePlatformFee } from '../services/config';
 import { accountBalances, postJournal, reconcile } from '../services/ledger';
 import { recomputeQualityScore } from '../services/quality';
+import { deleteObjects } from '../lib/storage';
 
 export const adminRouter = Router();
 adminRouter.use(requireRole('ADMIN'));
@@ -266,4 +267,79 @@ adminRouter.get('/monetization', asyncH(async (req, res) => {
     current_platform_fee: await resolvePlatformFee(pool, {}),
     reconciliation: await reconcile(pool),
   });
+}));
+
+// ---------------- DATA UJI (TEST DATA) ----------------
+/** Organisasi uji: nama diawali "UJI " atau user ber-email uji-*@supplier.id. */
+async function testOrgIds(db: Parameters<typeof q>[0]): Promise<string[]> {
+  const rows = await q<{ id: string }>(db, `SELECT id FROM organizations WHERE name LIKE 'UJI %' OR id IN (SELECT org_id FROM users WHERE email LIKE 'uji-%@supplier.id' AND org_id IS NOT NULL)`);
+  return rows.map((r) => r.id);
+}
+
+/** Pratinjau: apa saja yang akan dihapus oleh purge data uji. */
+adminRouter.get('/test-data', asyncH(async (_req, res) => {
+  const orgs = await testOrgIds(pool);
+  if (!orgs.length) return res.json({ organizations: [], orders: 0, evidence_files: 0, ledger_journals: 0 });
+  const [o, e, j, names] = await Promise.all([
+    one(pool, `SELECT count(*)::int AS n FROM orders WHERE buyer_id = ANY($1) OR supplier_id = ANY($1)`, [orgs]),
+    one(pool, `SELECT count(*)::int AS n FROM evidence_files WHERE supplier_id = ANY($1) OR buyer_id = ANY($1)`, [orgs]),
+    one(pool, `SELECT count(*)::int AS n FROM ledger_journals WHERE order_id IN (SELECT id FROM orders WHERE buyer_id = ANY($1) OR supplier_id = ANY($1)) OR id IN (SELECT journal_id FROM payouts WHERE supplier_id = ANY($1))`, [orgs]),
+    q(pool, `SELECT id, name, type FROM organizations WHERE id = ANY($1) ORDER BY name`, [orgs]),
+  ]);
+  res.json({ organizations: names, orders: o.n, evidence_files: e.n, ledger_journals: j.n });
+}));
+
+/**
+ * Hapus seluruh data uji (org UJI beserta user, produk, batch, order, bukti, ledger, payout, override fee) secara transaksional.
+ * Wajib konfirmasi literal. Data produksi lain tidak disentuh; rekonsiliasi global tetap seimbang karena jurnal dihapus utuh per order.
+ */
+adminRouter.post('/test-data/purge', asyncH(async (req, res) => {
+  const b = parse(z.object({ confirm: z.literal('HAPUS DATA UJI') }), req.body);
+  void b;
+  const result = await tx(async (c) => {
+    const orgs = await testOrgIds(c);
+    if (!orgs.length) return { organizations: 0, orders: 0, evidence_files: 0, storage_objects: 0 };
+    const users = (await q<{ id: string }>(c, `SELECT id FROM users WHERE org_id = ANY($1)`, [orgs])).map((r) => r.id);
+    const orders = (await q<{ id: string }>(c, `SELECT id FROM orders WHERE buyer_id = ANY($1) OR supplier_id = ANY($1)`, [orgs])).map((r) => r.id);
+    const files = await q<{ file_path: string }>(c, `SELECT file_path FROM evidence_files WHERE supplier_id = ANY($1) OR buyer_id = ANY($1) OR order_id = ANY($2) OR uploaded_by = ANY($3)`, [orgs, orders, users]);
+    const journals = (await q<{ id: string }>(c,
+      `SELECT id FROM ledger_journals WHERE order_id = ANY($1)
+         OR return_case_id IN (SELECT id FROM return_cases WHERE order_id = ANY($1))
+         OR id IN (SELECT journal_id FROM payouts WHERE supplier_id = ANY($2) AND journal_id IS NOT NULL)`, [orders, orgs])).map((r) => r.id);
+    // urutan sesuai ketergantungan FK (tanpa ON DELETE CASCADE)
+    await q(c, `DELETE FROM payouts WHERE supplier_id = ANY($1)`, [orgs]);
+    await q(c, `DELETE FROM ledger_entries WHERE journal_id = ANY($1) OR order_id = ANY($2)`, [journals, orders]);
+    await q(c, `DELETE FROM ledger_journals WHERE id = ANY($1)`, [journals]);
+    await q(c, `DELETE FROM financial_adjustments WHERE order_id = ANY($1)`, [orders]);
+    await q(c, `DELETE FROM disputes WHERE order_id = ANY($1)`, [orders]);
+    await q(c, `DELETE FROM evidence_files WHERE supplier_id = ANY($1) OR buyer_id = ANY($1) OR order_id = ANY($2) OR uploaded_by = ANY($3)`, [orgs, orders, users]);
+    await q(c, `DELETE FROM return_cases WHERE order_id = ANY($1)`, [orders]);
+    await q(c, `DELETE FROM inspections WHERE order_id = ANY($1)`, [orders]);
+    await q(c, `DELETE FROM shipment_events WHERE shipment_id IN (SELECT id FROM shipments WHERE order_id = ANY($1))`, [orders]);
+    await q(c, `DELETE FROM shipments WHERE order_id = ANY($1)`, [orders]);
+    await q(c, `DELETE FROM payments WHERE order_id = ANY($1)`, [orders]);
+    await q(c, `DELETE FROM order_events WHERE order_id = ANY($1)`, [orders]);
+    await q(c, `DELETE FROM orders WHERE id = ANY($1)`, [orders]);
+    await q(c, `DELETE FROM quotations WHERE supplier_id = ANY($1) OR rfq_id IN (SELECT id FROM rfqs WHERE buyer_id = ANY($1))`, [orgs]);
+    await q(c, `DELETE FROM rfqs WHERE buyer_id = ANY($1)`, [orgs]);
+    await q(c, `DELETE FROM declaration_acceptances WHERE supplier_id = ANY($1)`, [orgs]);
+    await q(c, `DELETE FROM harvests WHERE batch_id IN (SELECT id FROM batches WHERE supplier_id = ANY($1))`, [orgs]);
+    await q(c, `DELETE FROM batches WHERE supplier_id = ANY($1)`, [orgs]);
+    await q(c, `DELETE FROM products WHERE supplier_id = ANY($1)`, [orgs]);
+    await q(c, `DELETE FROM supplier_quality_scores WHERE supplier_id = ANY($1)`, [orgs]);
+    await q(c, `DELETE FROM config_audit_logs WHERE entity_id IN (SELECT id::text FROM fee_configs WHERE scope_ref = ANY($1)) OR user_id = ANY($2)`, [orgs, users]);
+    await q(c, `DELETE FROM fee_configs WHERE scope_ref = ANY($1)`, [orgs]);
+    await q(c, `UPDATE fee_configs SET created_by=NULL WHERE created_by = ANY($1)`, [users]);
+    await q(c, `UPDATE fee_configs SET approved_by=NULL WHERE approved_by = ANY($1)`, [users]);
+    await q(c, `UPDATE tax_rules SET created_by=NULL WHERE created_by = ANY($1)`, [users]);
+    await q(c, `UPDATE settings SET updated_by=NULL WHERE updated_by = ANY($1)`, [users]);
+    await q(c, `UPDATE ledger_journals SET created_by=NULL WHERE created_by = ANY($1)`, [users]);
+    await q(c, `DELETE FROM users WHERE id = ANY($1)`, [users]);
+    await q(c, `DELETE FROM organizations WHERE id = ANY($1)`, [orgs]);
+    await audit(c, 'organizations', orgs.join(','), 'DELETE', { organizations: orgs.length, orders: orders.length }, null, req.user!.id, 'Purge data uji');
+    return { organizations: orgs.length, orders: orders.length, evidence_files: files.length, storage_objects: 0, _files: files.map((f) => f.file_path) };
+  });
+  const { _files, ...out } = result as any;
+  if (_files?.length) out.storage_objects = await deleteObjects(_files);
+  res.json({ ...out, reconciliation: await reconcile(pool) });
 }));

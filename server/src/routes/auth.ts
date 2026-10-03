@@ -40,7 +40,18 @@ authRouter.post('/login', asyncH(async (req, res) => {
   if (!u || !(await bcrypt.compare(b.password, u.password_hash))) throw new HttpError(401, 'INVALID_CREDENTIALS');
   const user = { id: u.id, email: u.email, name: u.name, role: u.role, orgId: u.org_id };
   const org = u.org_id ? await maybe(pool, 'SELECT * FROM organizations WHERE id=$1', [u.org_id]) : null;
-  res.json({ token: signToken(user), user, organization: org });
+  res.json({ token: signToken(user, u.token_version ?? 0), user, organization: org });
+}));
+
+/** Ganti kata sandi akun sendiri (wajib kata sandi lama). */
+authRouter.post('/change-password', requireRole(), asyncH(async (req, res) => {
+  const b = parse(z.object({ current_password: z.string().min(1), new_password: z.string().min(8).max(128) }), req.body);
+  if (b.current_password === b.new_password) throw bad('PASSWORD_UNCHANGED', 'Kata sandi baru harus berbeda');
+  const u = await one(pool, 'SELECT * FROM users WHERE id=$1', [req.user!.id]);
+  if (!(await bcrypt.compare(b.current_password, u.password_hash))) throw new HttpError(401, 'INVALID_CREDENTIALS');
+  // token_version naik → semua sesi lama (termasuk token yang dipakai saat ini) dicabut; kembalikan token baru untuk sesi ini
+  const upd = await one(pool, 'UPDATE users SET password_hash=$2, token_version=token_version+1 WHERE id=$1 RETURNING token_version', [u.id, await bcrypt.hash(b.new_password, 10)]);
+  res.json({ ok: true, token: signToken(req.user!, upd.token_version) });
 }));
 
 authRouter.get('/me', requireRole(), asyncH(async (req, res) => {

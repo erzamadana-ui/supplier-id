@@ -113,4 +113,16 @@ describe('Scan label: QR payload, Code128 dan tautan publik semua diterima', () 
     expect(Number((await resto.get(`/api/listings/${b.id}`)).available_quantity)).toBe(40);
     expect((await owner.get(`/api/orders/${order.id}/reconcile`)).balanced).toBe(true);
   });
+  it('purge data uji menghapus org UJI + staf uji-* (maker/checker/kurir yang menyentuh order uji) tanpa menghapus org LOGISTICS sistem; rekonsiliasi tetap seimbang', async () => {
+    await owner.post('/api/admin/users', { email: 'uji-kurir-2@supplier.id', name: 'UJI Kurir 2', password: 'Kurir#12345', role: 'COURIER' }, 201);
+    await owner.post('/api/admin/users', { email: 'uji-checker-2@supplier.id', name: 'UJI Checker 2', password: 'Check#12345', role: 'ADMIN', admin_role: 'FINANCE_CHECKER' }, 201);
+    const prev = await owner.get('/api/admin/test-data');
+    expect(prev.organizations.some((o: any) => o.type === 'LOGISTICS')).toBe(false);
+    expect(prev.organizations.some((o: any) => o.name === 'UJI Tani Baru')).toBe(true);
+    const r = await owner.post('/api/admin/test-data/purge', { confirm: 'HAPUS DATA UJI' });
+    expect(r.organizations).toBeGreaterThanOrEqual(1); expect(r.users).toBeGreaterThanOrEqual(3); expect(r.reconciliation.balanced).toBe(true);
+    expect((await owner.get('/api/admin/users')).some((u: any) => u.email.startsWith('uji-'))).toBe(false);
+    expect((await pool.query(`SELECT 1 FROM organizations WHERE type='LOGISTICS' AND name='Supplier-ID Delivery'`)).rowCount).toBe(1);
+    expect((await pool.query(`SELECT 1 FROM users WHERE email='kurir@supplier.id'`)).rowCount).toBe(1);
+  });
 });

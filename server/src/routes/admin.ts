@@ -274,7 +274,13 @@ adminRouter.get('/monetization', asyncH(async (req, res) => {
 // ---------------- DATA UJI (TEST DATA) ----------------
 /** Organisasi uji: nama diawali "UJI " atau user ber-email uji-*@supplier.id. */
 async function testOrgIds(db: Parameters<typeof q>[0]): Promise<string[]> {
-  const rows = await q<{ id: string }>(db, `SELECT id FROM organizations WHERE name LIKE 'UJI %' OR id IN (SELECT org_id FROM users WHERE email LIKE 'uji-%@supplier.id' AND org_id IS NOT NULL)`);
+  // Organisasi sistem (LOGISTICS "Supplier-ID Delivery", tempat semua akun kurir bernaung) tidak pernah ikut dihapus — hanya user uji di dalamnya.
+  const rows = await q<{ id: string }>(db, `SELECT id FROM organizations WHERE type <> 'LOGISTICS' AND (name LIKE 'UJI %' OR id IN (SELECT org_id FROM users WHERE email LIKE 'uji-%@supplier.id' AND org_id IS NOT NULL))`);
+  return rows.map((r) => r.id);
+}
+/** User uji: anggota organisasi uji + staf/kurir uji (email uji-*@supplier.id) yang dibuat lewat Admin → Staf. */
+async function testUserIds(db: Parameters<typeof q>[0], orgs: string[]): Promise<string[]> {
+  const rows = await q<{ id: string }>(db, `SELECT id FROM users WHERE org_id = ANY($1) OR email LIKE 'uji-%@supplier.id'`, [orgs]);
   return rows.map((r) => r.id);
 }
 
@@ -300,8 +306,8 @@ adminRouter.post('/test-data/purge', asyncH(async (req, res) => {
   void b;
   const result = await tx(async (c) => {
     const orgs = await testOrgIds(c);
-    if (!orgs.length) return { organizations: 0, orders: 0, evidence_files: 0, storage_objects: 0 };
-    const users = (await q<{ id: string }>(c, `SELECT id FROM users WHERE org_id = ANY($1)`, [orgs])).map((r) => r.id);
+    const users = await testUserIds(c, orgs);
+    if (!orgs.length && !users.length) return { organizations: 0, users: 0, orders: 0, evidence_files: 0, storage_objects: 0 };
     const orders = (await q<{ id: string }>(c, `SELECT id FROM orders WHERE buyer_id = ANY($1) OR supplier_id = ANY($1)`, [orgs])).map((r) => r.id);
     const files = await q<{ file_path: string }>(c, `SELECT file_path FROM evidence_files WHERE supplier_id = ANY($1) OR buyer_id = ANY($1) OR order_id = ANY($2) OR uploaded_by = ANY($3)`, [orgs, orders, users]);
     const journals = (await q<{ id: string }>(c,
@@ -355,10 +361,21 @@ adminRouter.post('/test-data/purge', asyncH(async (req, res) => {
     await q(c, `UPDATE organizations SET bank_verified_by=NULL WHERE bank_verified_by = ANY($1)`, [users]);
     await q(c, `UPDATE shipments SET courier_user_id=NULL WHERE courier_user_id = ANY($1)`, [users]);
     await q(c, `UPDATE ledger_journals SET created_by=NULL WHERE created_by = ANY($1)`, [users]);
+    await q(c, `UPDATE payment_tasks SET maker_id=NULL WHERE maker_id = ANY($1)`, [users]);
+    await q(c, `UPDATE payment_tasks SET checker_id=NULL WHERE checker_id = ANY($1)`, [users]);
+    await q(c, `UPDATE payment_tasks SET created_by=NULL WHERE created_by = ANY($1)`, [users]);
+    await q(c, `DELETE FROM payment_task_events WHERE actor_id = ANY($1)`, [users]);
+    await q(c, `DELETE FROM task_events WHERE actor_id = ANY($1)`, [users]);
+    await q(c, `UPDATE escalations SET resolved_by=NULL WHERE resolved_by = ANY($1)`, [users]);
+    // staf uji (ops/finance/kurir) mungkin menyentuh order non-uji: lepaskan referensi, jangan hapus datanya
+    for (const [t, col] of [['payouts', 'created_by'], ['inspections', 'inspector_id'], ['return_cases', 'decided_by'], ['disputes', 'resolved_by'], ['financial_adjustments', 'created_by'], ['fulfillment_tasks', 'assignee_id'], ['qc_records', 'inspector_id'], ['packages', 'packed_by'], ['label_prints', 'printed_by'], ['escalations', 'assignee_id'], ['tickets', 'opened_by'], ['tickets', 'assignee_id'], ['ticket_messages', 'author_id'], ['order_events', 'actor_id']]) {
+      await q(c, `UPDATE ${t} SET ${col}=NULL WHERE ${col} = ANY($1)`, [users]);
+    }
+    await q(c, `DELETE FROM declaration_acceptances WHERE user_id = ANY($1)`, [users]);
     await q(c, `DELETE FROM users WHERE id = ANY($1)`, [users]);
     await q(c, `DELETE FROM organizations WHERE id = ANY($1)`, [orgs]);
     await audit(c, 'organizations', orgs.join(','), 'DELETE', { organizations: orgs.length, orders: orders.length }, null, req.user!.id, 'Purge data uji');
-    return { organizations: orgs.length, orders: orders.length, evidence_files: files.length, storage_objects: 0, _files: files.map((f) => f.file_path) };
+    return { organizations: orgs.length, users: users.length, orders: orders.length, evidence_files: files.length, storage_objects: 0, _files: files.map((f) => f.file_path) };
   });
   const { _files, ...out } = result as any;
   if (_files?.length) out.storage_objects = await deleteObjects(_files);

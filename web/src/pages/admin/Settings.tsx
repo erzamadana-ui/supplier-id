@@ -368,6 +368,8 @@ export default function Settings() {
                 <NumberSetting k="delivery.max_attempts" row={map['delivery.max_attempts']} save={save} />
                 <NumberSetting k="supplier.response_hours" row={map['supplier.response_hours']} save={save} />
                 <NumberSetting k="payment.expiry_hours" row={map['payment.expiry_hours']} save={save} />
+                <h2>Mitra</h2>
+                <BoolSetting k="supplier.require_verified_to_publish" label="Wajib verifikasi admin sebelum listing tayang" hint="Temuan inspeksi 8 Okt 2026: mitra baru bisa langsung tayang & dibeli. Aktifkan agar batch hanya bisa dipublikasikan setelah mitra diverifikasi di Mitra & Quality Score. [USULAN: aktif]" row={map['supplier.require_verified_to_publish']} save={save} />
               </div>
               <div>
                 <h2>Payout mitra</h2>

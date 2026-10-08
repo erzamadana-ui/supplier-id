@@ -278,10 +278,22 @@ const SCAN_NEXT: Record<string, { from: string[]; to: string; roles: string[] }>
   DELIVER: { from: ['PICKED_UP', 'IN_TRANSIT'], to: 'DELIVERED', roles: ['COURIER', 'ADMIN'] },
   RECEIVE: { from: ['DELIVERED'], to: 'RECEIVED', roles: ['BUYER', 'ADMIN'] },
 };
+/**
+ * Normalisasi kode hasil pemindaian: QR label berisi `SID:PKG:<no>`, Code128 berisi `<no>`, tautan publik `…/p/<no>`.
+ * Semua bentuk dipetakan ke nomor paket `PKG-YYYY-NNNNNN` (huruf besar, tanpa spasi).
+ */
+export function normalizeScanCode(raw: string) {
+  let code = String(raw ?? '').trim();
+  const m = code.match(/PKG-\d{4}-\d{6}/i);
+  if (m) return m[0].toUpperCase();
+  code = code.replace(/^SID:PKG:/i, '').replace(/^.*\/p\//i, '');
+  return code.trim().toUpperCase();
+}
+
 export async function scanPackage(db: Db, u: AuthUser, a: { code: string; action: keyof typeof SCAN_NEXT; shipment_id?: string; location?: string; lat?: number; lng?: number }) {
   const rule = SCAN_NEXT[a.action];
   if (!rule) throw bad('INVALID_SCAN_ACTION');
-  const code = a.code.trim().toUpperCase();
+  const code = normalizeScanCode(a.code);
   const log = async (pkgId: string | null, result: 'OK' | 'REJECTED', reason?: string) => {
     await q(db, `INSERT INTO package_scans(package_id, code, action, actor_id, actor_role, result, reason, location, lat, lng) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,
       [pkgId, code, a.action, u.id, u.role, result, reason ?? null, a.location ?? null, a.lat ?? null, a.lng ?? null]);
@@ -299,6 +311,9 @@ export async function scanPackage(db: Db, u: AuthUser, a: { code: string; action
     if (!s) return log(p.id, 'REJECTED', 'NOT_IN_YOUR_MANIFEST');
     const o = await one(db, 'SELECT id FROM orders WHERE id=$1', [p.order_id]);
     if (s.order_id !== o.id) return log(p.id, 'REJECTED', 'PACKAGE_NOT_IN_SHIPMENT');
+    // Status shipment harus sesuai aksi: PICKUP hanya saat manifest SCHEDULED; DELIVER hanya saat sudah dijemput/di jalan.
+    const allowedShip = a.action === 'PICKUP' ? ['SCHEDULED'] : a.action === 'DELIVER' ? ['PICKED_UP', 'IN_TRANSIT', 'DELIVERY_FAILED'] : null;
+    if (allowedShip && !allowedShip.includes(s.status)) return log(p.id, 'REJECTED', `ILLEGAL_SHIPMENT_STATE_${s.status}`);
     await q(db, 'UPDATE packages SET shipment_id=$2 WHERE id=$1', [p.id, s.id]);
   }
   if (u.role === 'BUYER') {

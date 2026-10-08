@@ -79,8 +79,8 @@ describe('Pricing engine', () => {
     const r = computePricing({ quantity: 10, unitPrice: 100000, weightKg: 10, distanceKm: 0, sellerTaxStatus: 'NON_PKP', buyerTaxStatus: 'NON_PKP', categoryTaxClass: 'BASIC_NEEDS_EXEMPT' },
       cfg({ payment: { feePercent: 1, feeFixed: 0, providerFeePercent: 0.7, providerFeeFixed: 4000 } }));
     const before = r.productValue + r.platformFeeAmount + r.packagingAmount + r.logisticsAmount + r.taxAmount;
-    expect(r.paymentFeeAmount).toBe(Math.round(before * 0.01 * 100) / 100);
-    expect(r.costBasis.providerFee).toBe(Math.round((r.totalAmount * 0.007 + 4000) * 100) / 100);
+    expect(r.paymentFeeAmount).toBe(Math.round(before * 0.01)); // rupiah penuh (v2.1)
+    expect(r.costBasis.providerFee).toBe(Math.round(r.totalAmount * 0.007 + 4000));
     expect(r.costBasis.packagingCost).toBe(r.packagingAmount * 0.8);
   });
 });

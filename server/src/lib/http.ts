@@ -114,4 +114,5 @@ export function errorHandler(err: any, _req: Request, res: Response, _next: Next
 }
 
 /** Pembulatan uang: ke rupiah penuh (2 desimal disimpan, tapi kita pakai satuan rupiah bulat). */
-export const money = (n: number) => Math.round(n * 100) / 100;
+/** Rupiah tidak memakai sen: semua nilai uang dibulatkan ke rupiah penuh (total = Σ komponen tetap konsisten karena setiap komponen dibulatkan). */
+export const money = (n: number) => Math.round(n);

@@ -8,7 +8,17 @@ export const DEMO_MODE = import.meta.env.VITE_DEMO === 'true';
 /** URL berkas bukti: URL absolut (Supabase Storage) atau /uploads/<nama> di API. */
 export const fileUrl = (p: string) => (/^https?:\/\//.test(p) ? p : `${API_BASE}/uploads/${p}`);
 export const getToken = () => localStorage.getItem(TOKEN_KEY) || '';
-export const setToken = (t: string) => (t ? localStorage.setItem(TOKEN_KEY, t) : localStorage.removeItem(TOKEN_KEY));
+export const setToken = (t: string) => {
+  if (t) localStorage.setItem(TOKEN_KEY, t); else localStorage.removeItem(TOKEN_KEY);
+  clearApiCache(); // login/logout/ganti akun: data akun sebelumnya tidak boleh tampil dari cache offline
+};
+/** Buang cache API service worker (dipanggil saat token berubah). Aman dipanggil tanpa SW. */
+export function clearApiCache() {
+  try {
+    navigator.serviceWorker?.controller?.postMessage({ type: 'CLEAR_API_CACHE' });
+    if (typeof caches !== 'undefined') caches.keys().then((ks) => ks.filter((k) => k.endsWith('-api')).forEach((k) => caches.delete(k))).catch(() => undefined);
+  } catch { /* abaikan */ }
+}
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public details?: any) { super(message); }

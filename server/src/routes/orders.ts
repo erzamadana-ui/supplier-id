@@ -9,6 +9,7 @@ import { recomputeQualityScore } from '../services/quality';
 import { runEligibilityCheck } from '../services/returns';
 import { createAcceptanceTask } from '../services/fulfillment';
 import { ensurePaymentTask } from '../services/settlement';
+import { notify } from '../services/notify';
 
 export const ordersRouter = Router();
 
@@ -278,7 +279,13 @@ ordersRouter.post('/orders/:id/cancel', requireRole('BUYER', 'SUPPLIER', 'ADMIN'
     if (['PENDING_PAYMENT', 'PAID', 'PROCESSING', 'PACKING', 'READY_FOR_PICKUP', 'DELIVERY_FAILED'].includes(o.status)) {
       await q(c, `UPDATE batches SET available_quantity=available_quantity+$2, status=CASE WHEN status='SOLD_OUT' THEN 'READY_FOR_ORDER' ELSE status END WHERE id=$1`, [o.batch_id, o.quantity]);
       await q(c, `UPDATE fulfillment_tasks SET status='CANCELLED', updated_at=now() WHERE order_id=$1 AND status NOT IN ('DONE','REJECTED','CANCELLED')`, [o.id]);
-      await q(c, `UPDATE packages SET status='CANCELLED', cancelled_at=now(), cancel_reason='Order dibatalkan' WHERE order_id=$1 AND status IN ('PACKED','HANDED_OVER')`, [o.id]);
+      await q(c, `UPDATE packages SET status='CANCELLED', cancelled_at=now(), cancel_reason='Order dibatalkan' WHERE order_id=$1 AND status IN ('PACKED','HANDED_OVER','PICKED_UP','IN_TRANSIT','DELIVERED')`, [o.id]);
+      // Shipment yang masih aktif ikut dibatalkan agar tidak tersisa di manifest kurir / dispatch.
+      const ships = await q(c, `UPDATE shipments SET status='CANCELLED' WHERE order_id=$1 AND type='DELIVERY' AND status IN ('SCHEDULED','PICKED_UP','IN_TRANSIT','DELIVERY_FAILED') RETURNING id, courier_user_id`, [o.id]);
+      for (const s of ships) {
+        await q(c, `INSERT INTO shipment_events(shipment_id, event_type, note) VALUES ($1,'CANCELLED',$2)`, [s.id, `Order dibatalkan: ${reason || '-'}`]);
+        if (s.courier_user_id) await notify(c, { userId: s.courier_user_id, kind: 'MANIFEST', title: `Pickup ${o.order_no} dibatalkan`, body: reason || 'Order dibatalkan', link: '/courier' });
+      }
       await q(c, `UPDATE escalations SET status='RESOLVED', resolution='Order dibatalkan', resolved_at=now() WHERE order_id=$1 AND status='OPEN'`, [o.id]);
     }
     if (['PAID', 'PROCESSING', 'PACKING', 'READY_FOR_PICKUP', 'DELIVERY_FAILED'].includes(o.status)) {

@@ -1,3 +1,22 @@
+# Release Notes — Supplier-ID v2.1 (8 Okt 2026) — perbaikan hasil inspeksi serah terima produksi
+
+Sumber: inspeksi end-to-end di produksi dengan akun `UJI-*` (lihat `docs/INSPEKSI-PRODUKSI-2026-10-08.md`). Semua perbaikan diuji otomatis (`tests/e2e/v2-fixes.test.ts`, total 49 test lolos).
+
+## Diperbaiki (P1)
+- **Scan QR label**: payload QR `SID:PKG:<no>` (dan tautan publik `/p/<no>`) kini diterima `/api/scan` — sebelumnya `UNKNOWN_CODE`, sehingga kamera kurir selalu gagal dan hanya ketik manual yang jalan.
+- **Order macet sebelum pickup**: `POST /courier/shipments/:id/events` sekarang ditolak (409 `SHIPMENT_NOT_IN_DELIVERY`) bila shipment belum `PICKED_UP`; sebelumnya event ini diam-diam memindahkan paket ke `IN_TRANSIT` sehingga pickup selamanya `PACKAGES_NOT_SCANNED`. Scan `PICKUP` hanya saat manifest `SCHEDULED`, scan `DELIVER` hanya setelah pickup (`ILLEGAL_SHIPMENT_STATE_*`).
+- **Payout mitra buntu**: payment task yang dibuat saat rekening mitra belum ada (`ON_HOLD`, `bank_snapshot` NULL) kini memuat ulang snapshot rekening saat `/release` dan `/submit`; rekening belum diverifikasi ops → 409 `BANK_ACCOUNT_UNVERIFIED`; `/release` juga menolak bila tiket COMPLAINT masih terbuka.
+- **Service worker (sid-v2-4)**: GET API **network-first** (cache hanya fallback offline) — data lama tidak lagi tampil setelah aksi (task baru, "job terakhir"); cache dipisah per akun (sidik jari Authorization) dan **dibuang saat login/logout** sehingga ganti akun di perangkat yang sama tidak menampilkan panel/data akun sebelumnya.
+
+## Diperbaiki (P2/P3)
+- Pembatalan order kini membatalkan shipment aktif (status baru `CANCELLED`, migrasi 0006) dan semua paket; kurir mendapat notifikasi; tidak tersisa di manifest/dispatch.
+- Semua nilai uang dibulatkan ke **rupiah penuh** (sebelumnya total seperti Rp1.289.052,9).
+- Detail listing publik hanya menampilkan foto deklarasi batch/panen; foto QC milik order tidak lagi bocor ke katalog.
+- Setting baru `supplier.require_verified_to_publish` (default **false**, [USULAN: true] — keputusan GM): mitra harus diverifikasi admin sebelum batch dapat ditayangkan (`SUPPLIER_NOT_VERIFIED`). Tersedia di Admin → Konfigurasi → Fulfillment & Payout → Mitra.
+
+## Catatan operasional
+- Cron GitHub Actions `*/10` **tidak andal**: hanya 19 run sejak 4 Okt dengan jeda 4–6 jam (bukti `GET /api/jobs/runs`). Jendela bayar 2 jam & auto-confirm 24 jam bergantung padanya → pakai pinger eksternal (mis. cron-job.org, tiap 5 menit, `POST /api/jobs/run` + header `x-job-secret`) atau Vercel Cron (Pro). Lihat RUNBOOK.
+
 # Release Notes — Supplier-ID v2.0 (4 Okt 2026)
 
 Commit API/web: `684b370` (repo `erzamadana-ui/supplier-id`); web build: `19f9f3c` (repo `erzamadana-ui/antarkita-landing`, folder `supplier-id/`).

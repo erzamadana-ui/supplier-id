@@ -109,6 +109,8 @@ courierRouter.post('/courier/shipments/:id/pickup', requireRole('COURIER', 'ADMI
 /** Tracking event oleh kurir. */
 courierRouter.post('/courier/shipments/:id/events', requireRole('COURIER', 'ADMIN'), asyncH(async (req, res) => {
   const s = await assertCourier(req.params.id, req.user!);
+  // Checkpoint hanya sah setelah pickup. Sebelumnya (SCHEDULED) event ini diam-diam memindahkan paket ke IN_TRANSIT sehingga pickup tidak pernah bisa dilakukan.
+  if (!['PICKED_UP', 'IN_TRANSIT'].includes(s.status)) throw conflict('SHIPMENT_NOT_IN_DELIVERY', { status: s.status });
   const b = parse(z.object({ event_type: z.string().default('CHECKPOINT'), location: z.string().optional(), lat: z.coerce.number().optional(), lng: z.coerce.number().optional(), temperature_c: z.coerce.number().optional(), note: z.string().optional() }), req.body ?? {});
   const row = await tx(async (c) => {
     const ev = await one(c, `INSERT INTO shipment_events(shipment_id, event_type, location, lat, lng, temperature_c, note) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING *`, [s.id, b.event_type, b.location ?? null, b.lat ?? null, b.lng ?? null, b.temperature_c ?? null, b.note ?? null]);

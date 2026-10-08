@@ -10,6 +10,8 @@
 ## Job terjadwal (durable)
 Endpoint `POST /api/jobs/run` (header `x-job-secret`) idempotent; dipanggil GitHub Actions `jobs-cron.yml` tiap 10 menit (secret repo `JOB_SECRET`). Memproses: pembayaran kedaluwarsa (lepas stok), task terlambat (LATE + eskalasi), jendela konfirmasi berakhir (auto-confirm sesuai syarat / eskalasi), inquiry payout PROCESSING. Riwayat: `GET /api/jobs/runs` (Admin → Operasional "Job terakhir"). Jika job tidak berjalan >30 menit → cek Actions; jalankan manual lewat tombol di dashboard ops (admin dengan `orders.manage`).
 
+**Temuan 8 Okt 2026:** jadwal GitHub Actions `*/10` pada repo ini nyatanya berjalan hanya ±5×/hari (jeda 4–6 jam) — GitHub tidak menjamin jadwal cron, terutama repo tanpa aktivitas. Karena jendela bayar 2 jam, task terlambat, dan auto-confirm 24 jam bergantung pada job ini, pasang **pinger eksternal** sebagai sumber utama: cron-job.org (gratis) → job baru, URL `https://supplier-api.antarkitaindonesia.com/api/jobs/run`, metode `POST`, header `x-job-secret: <JOB_SECRET Vercel>`, interval 5 menit, notifikasi bila gagal. Biarkan workflow Actions tetap aktif sebagai cadangan (job idempotent, aman dipanggil ganda). Verifikasi: `GET /api/jobs/runs` harus bertambah tiap ≤10 menit.
+
 ## Prosedur harian ops
 1. Admin → Operasional hari ini: task terlambat, QC gagal, gagal antar, tiket, konfirmasi jatuh tempo, rekonsiliasi.
 2. Eskalasi: `SUPPLIER_REJECTED/NO_RESPONSE/SUPPLIER_LATE` → batal+refund (atau hubungi mitra), `EVIDENCE_INVALID` → verifikasi foto kurir di Dispatch, `CONFIRMATION_OVERDUE` → hubungi pelanggan → ops-confirm, `DELIVERY_FAILED` → kirim ulang/batal, `WEIGHT_VARIANCE` → menunggu pelanggan, `PAYOUT_FAILED` → finance.

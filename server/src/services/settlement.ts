@@ -105,9 +105,24 @@ export async function confirmReceived(db: Db, orderId: string, by: 'BUYER' | 'AU
 }
 
 // ---------------- MAKER / CHECKER / PROSES ----------------
+/**
+ * Snapshot rekening diambil saat task dibuat. Bila saat itu rekening belum ada (task ON_HOLD) dan mitra kemudian mendaftarkan
+ * rekening yang diverifikasi ops, snapshot dimuat ulang di sini — kalau tidak, task tidak pernah bisa diajukan (temuan inspeksi 8 Okt 2026).
+ * Rekening yang belum diverifikasi tidak dipakai (BANK_ACCOUNT_UNVERIFIED) agar transfer tidak ke rekening yang belum dicek.
+ */
+export async function refreshBankSnapshot(db: Db, t: any) {
+  if (t.bank_snapshot?.verified_at) return t.bank_snapshot;
+  const sup = await one(db, 'SELECT bank_name, bank_account, bank_account_name, bank_verified_at FROM organizations WHERE id=$1', [t.supplier_id]);
+  if (!sup.bank_account) throw conflict('BANK_ACCOUNT_MISSING');
+  if (!sup.bank_verified_at) throw conflict('BANK_ACCOUNT_UNVERIFIED');
+  const bank = { bank_name: sup.bank_name, account: sup.bank_account, account_name: sup.bank_account_name, verified_at: sup.bank_verified_at };
+  await q(db, 'UPDATE payment_tasks SET bank_snapshot=$2::jsonb, updated_at=now() WHERE id=$1', [t.id, JSON.stringify(bank)]);
+  return bank;
+}
+
 export async function submitPaymentTask(db: Db, id: string, u: AuthUser) {
   const t = await one(db, 'SELECT * FROM payment_tasks WHERE id=$1', [id]);
-  if (!t.bank_snapshot) throw conflict('BANK_ACCOUNT_MISSING');
+  await refreshBankSnapshot(db, t);
   const net = await supplierNetForOrder(db, t.order_id, t.supplier_id);
   if (Math.abs(net.net - Number(t.net_amount)) > 0.005) {
     await q(db, 'UPDATE payment_tasks SET net_amount=$2, adjustment_amount=$3 WHERE id=$1', [id, net.net, -net.adjustments]); // sinkron dengan ledger sebelum diajukan
@@ -132,6 +147,9 @@ export async function releasePaymentTask(db: Db, id: string, u: AuthUser) {
   const t = await one(db, 'SELECT * FROM payment_tasks WHERE id=$1', [id]);
   const openCase = await maybe(db, `SELECT id FROM return_cases WHERE order_id=$1 AND status NOT IN ('CLOSED','REJECTED')`, [t.order_id]);
   if (openCase) throw conflict('DISPUTE_STILL_OPEN');
+  const openTicket = await maybe(db, `SELECT id FROM tickets WHERE order_id=$1 AND category='COMPLAINT' AND status NOT IN ('CLOSED','RESOLVED')`, [t.order_id]);
+  if (openTicket) throw conflict('COMPLAINT_STILL_OPEN');
+  await refreshBankSnapshot(db, t); // alasan hold "rekening belum ada" tidak boleh dilepas sebelum rekening terverifikasi
   const net = await supplierNetForOrder(db, t.order_id, t.supplier_id);
   return ptTransition(db, id, 'CREATED', u.id, 'Hold dilepas', `, hold_reason=NULL, net_amount=${net.net}, adjustment_amount=${-net.adjustments}`);
 }

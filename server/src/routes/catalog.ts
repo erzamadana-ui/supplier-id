@@ -63,7 +63,8 @@ catalogRouter.get('/listings/:batchId', asyncH(async (req, res) => {
      WHERE b.id=$1`,
     [req.params.batchId],
   );
-  const photos = await q(pool, `SELECT id, owner_type, kind, media_type, file_path, taken_at, uploaded_at, lat, lng FROM evidence_files WHERE batch_id=$1 ORDER BY uploaded_at`, [b.id]);
+  // Hanya foto deklarasi produk/panen yang tampil publik; foto QC/paket/pengiriman milik order tertentu tidak ditampilkan di katalog.
+  const photos = await q(pool, `SELECT id, owner_type, kind, media_type, file_path, taken_at, uploaded_at, lat, lng FROM evidence_files WHERE batch_id=$1 AND owner_type IN ('BATCH','HARVEST_CURRENT','HARVEST_PRE','HARVEST_FINAL') ORDER BY uploaded_at`, [b.id]);
   const harvest = await maybe(pool, 'SELECT * FROM harvests WHERE batch_id=$1', [b.id]);
   const declaration = await maybe(pool, 'SELECT declaration_version, accepted_at FROM declaration_acceptances WHERE batch_id=$1 ORDER BY accepted_at DESC LIMIT 1', [b.id]);
   const quality = await latestQualityScore(pool, b.supplier_id);

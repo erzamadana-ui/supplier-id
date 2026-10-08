@@ -181,7 +181,8 @@ async function readiness(b: any) {
 supplierRouter.post('/batches/:id/publish', asyncH(async (req, res) => {
   const b = await one(pool, `SELECT b.*, p.category_id FROM batches b JOIN products p ON p.id=b.product_id WHERE b.id=$1`, [req.params.id]);
   if (b.supplier_id !== orgOf(req)) throw forbidden();
-  const org = await one(pool, 'SELECT status FROM organizations WHERE id=$1', [b.supplier_id]);
+  const org = await one(pool, 'SELECT status, verified FROM organizations WHERE id=$1', [b.supplier_id]);
+  if (!org.verified && (await getSetting(pool, 'supplier.require_verified_to_publish', false))) throw conflict('SUPPLIER_NOT_VERIFIED', { hint: 'Menunggu verifikasi admin sebelum listing dapat ditayangkan' });
   if (['SUSPENDED', 'UNDER_REVIEW', 'LISTING_LIMITED'].includes(org.status)) {
     const activeCount = await one(pool, `SELECT COUNT(*)::int AS n FROM batches WHERE supplier_id=$1 AND status IN ('READY_FOR_ORDER','UPCOMING','PRE_HARVEST_UPDATED')`, [b.supplier_id]);
     if (org.status !== 'LISTING_LIMITED' || activeCount.n >= 1) throw conflict('SUPPLIER_LISTING_RESTRICTED', { status: org.status });
